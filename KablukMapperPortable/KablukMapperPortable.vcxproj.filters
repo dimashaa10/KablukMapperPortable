@@ -44,6 +44,12 @@
     <ClCompile Include="props.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="keyboard.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="values.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
     <ClCompile Include="settings.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -63,7 +69,7 @@
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="bspchain.c">
-      <Filter>Сторонний код\tyrutils</Filter>
+      <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="vendor\tyrutils\common\bspfile.c">
       <Filter>Сторонний код\tyrutils</Filter>
@@ -197,6 +203,12 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="props.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="keyboard.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="values.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="settings.h">

@@ -21,6 +21,8 @@
 #define KEY_PANEL_LEFT SDLK_q  /* PSP: L - fold the left tool panel    */
 #define KEY_PANEL_RIGHT SDLK_e /* PSP: R - fold the right property panel */
 
+#define KEY_PROP_FOCUS SDLK_f /* jump into the right panel to edit values */
+
 #define KEY_OPEN_SETTINGS SDLK_RETURN /* PSP: SELECT - editor settings */
 #define KEY_OPEN_COMPILE SDLK_F2      /* PSP: START - compile map      */
 

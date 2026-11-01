@@ -31,15 +31,23 @@ static void chain_line_to_log(const char *line)
 /* ------------------------------------------------------------------ */
 /* Text helpers (no snprintf: keeps this C89 and PSP friendly)         */
 /* ------------------------------------------------------------------ */
-static int cat_str(char *buf, int len, const char *text)
+/* Appends 'text' to a buffer of 'cap' bytes (including the terminator).
+ * The log lines and the .map keys use different buffers, so the cap is a
+ * parameter instead of a global constant. */
+static int cat_str_cap(char *buf, int cap, int len, const char *text)
 {
     int i = 0;
 
-    while (text[i] != '\0' && len < COMPILE_LOG_LEN - 1) {
+    while (text[i] != '\0' && len < cap - 1) {
         buf[len++] = text[i++];
     }
     buf[len] = '\0';
     return len;
+}
+
+static int cat_str(char *buf, int len, const char *text)
+{
+    return cat_str_cap(buf, COMPILE_LOG_LEN, len, text);
 }
 
 static int cat_int(char *buf, int len, int value)
@@ -158,6 +166,18 @@ const char *compile_status_text(const CompileJob *job)
 static int cell_texture(const Grid *grid, int cx, int cy)
 {
     return (int)grid->tex[cy][cx];
+}
+
+/* Cell index -> world units. The map is centred on the origin, so cell 0 of
+ * a 32 cell map starts at -2048 and the last one ends at +2048. */
+static int cell_world_x(int cx)
+{
+    return (cx - MAP_COLS / 2) * BLOCK_UNITS;
+}
+
+static int cell_world_y(int cy)
+{
+    return (cy - MAP_ROWS / 2) * BLOCK_UNITS;
 }
 
 static int count_solid(const Grid *grid)
@@ -331,7 +351,8 @@ static const char *brush_texture(const Grid *grid, const Wad *wad, int cx,
 /* Job                                                                 */
 /* ------------------------------------------------------------------ */
 void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                   const Settings *settings, const Wad *wad)
+                   const Settings *settings, const Wad *wad,
+                   const ValueStore *values)
 {
     char buf[COMPILE_LOG_LEN];
     int len;
@@ -346,12 +367,12 @@ void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
 
     /* build the target path */
     len = 0;
-    len = cat_str(job->map_path, 0, job->out_dir);
+    len = cat_str_cap(job->map_path, PATH_LEN, 0, job->out_dir);
     if (len > 0 && job->map_path[len - 1] != '/' && job->map_path[len - 1] != '\\') {
         job->map_path[len++] = '/';
         job->map_path[len] = '\0';
     }
-    cat_str(job->map_path, len, MAP_NAME ".map");
+    cat_str_cap(job->map_path, PATH_LEN, len, MAP_NAME ".map");
 
     log_target = job;
     job->chain_started = 0;
@@ -379,7 +400,8 @@ static void compile_fail(CompileJob *job, const char *why)
 }
 
 void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                  const Settings *settings, const Wad *wad)
+                  const Settings *settings, const Wad *wad,
+                  const ValueStore *values)
 {
     char buf[COMPILE_LOG_LEN];
     int len;
@@ -494,25 +516,49 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
             write_text(job, settings->wad_path);
             write_text(job, "\"\n");
         }
-        write_text(job, "\"message\" \"Kabluk map\"\n");
-        /* worldspawn "light" is the map-wide minimum light (minlight in the
-         * light tool), so a map is never black even without light entities */
-        len = 0;
-        len = cat_str(buf, len, "\"light\" \"");
-        len = cat_int(buf, len, DEFAULT_MINLIGHT);
-        cat_str(buf, len, "\"\n");
-        write_text(job, buf);
-        len = 0;
-        len = cat_str(buf, len, "WORLDSPAWN LIGHT: ");
-        len = cat_int(buf, len, DEFAULT_MINLIGHT);
-        cat_str(buf, len, " (MINLIGHT)");
-        compile_log_add(job, buf);
+        {
+            const char *msg = values_get(values, VALUES_WORLD_CX,
+                                         VALUES_WORLD_CY, "message");
 
-        /* floor and ceiling slabs covering the whole map */
-        write_box(job, 0, 0, -SLAB_THICKNESS, MAP_COLS * BLOCK_UNITS,
-                  MAP_ROWS * BLOCK_UNITS, 0, wad_fallback_texture(wad));
-        write_box(job, 0, 0, BLOCK_HEIGHT_UNITS, MAP_COLS * BLOCK_UNITS,
-                  MAP_ROWS * BLOCK_UNITS, BLOCK_HEIGHT_UNITS + SLAB_THICKNESS,
+            write_text(job, "\"message\" \"");
+            write_text(job, msg != NULL ? msg : DEFAULT_MAP_MESSAGE);
+            write_text(job, "\"\n");
+        }
+        /* worldspawn "light" is the map-wide minimum light (minlight in the
+         * light tool), so a map is never black even without light entities.
+         * The right panel can change it; 200 is the default. */
+        {
+            const char *light = values_get(values, VALUES_WORLD_CX,
+                                           VALUES_WORLD_CY, "light");
+
+            len = 0;
+            len = cat_str(buf, len, "\"light\" \"");
+            if (light != NULL) {
+                len = cat_str(buf, len, light);
+            } else {
+                len = cat_int(buf, len, DEFAULT_MINLIGHT);
+            }
+            cat_str(buf, len, "\"\n");
+            write_text(job, buf);
+
+            len = 0;
+            len = cat_str(buf, len, "WORLDSPAWN LIGHT: ");
+            if (light != NULL) {
+                len = cat_str(buf, len, light);
+            } else {
+                len = cat_int(buf, len, DEFAULT_MINLIGHT);
+            }
+            cat_str(buf, len, " (MINLIGHT)");
+            compile_log_add(job, buf);
+        }
+
+        /* floor and ceiling slabs covering the whole map (-2048..2048) */
+        write_box(job, -MAP_HALF_UNITS, -MAP_HALF_UNITS, -SLAB_THICKNESS,
+                  MAP_HALF_UNITS, MAP_HALF_UNITS, 0,
+                  wad_fallback_texture(wad));
+        write_box(job, -MAP_HALF_UNITS, -MAP_HALF_UNITS, BLOCK_HEIGHT_UNITS,
+                  MAP_HALF_UNITS, MAP_HALF_UNITS,
+                  BLOCK_HEIGHT_UNITS + SLAB_THICKNESS,
                   wad_fallback_texture(wad));
         job->brush_done = 2;
         job->cur_row = 0;
@@ -535,9 +581,10 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
                 break;
             }
             (void)tex;
-            write_box(job, x0 * BLOCK_UNITS, job->cur_row * BLOCK_UNITS, 0,
-                      (x1 + 1) * BLOCK_UNITS, (job->cur_row + 1) * BLOCK_UNITS,
-                      BLOCK_HEIGHT_UNITS, brush_texture(grid, wad, x0, job->cur_row));
+            write_box(job, cell_world_x(x0), cell_world_y(job->cur_row), 0,
+                      cell_world_x(x1 + 1), cell_world_y(job->cur_row + 1),
+                      BLOCK_HEIGHT_UNITS,
+                      brush_texture(grid, wad, x0, job->cur_row));
             job->brush_done++;
             done++;
         }
@@ -582,10 +629,38 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
                 write_text(job, buf);
                 write_text(job, c->name);
                 write_text(job, "\"\n\"origin\" \"");
-                sprintf(buf, "%d %d 24", x * BLOCK_UNITS + BLOCK_UNITS / 2,
-                        y * BLOCK_UNITS + BLOCK_UNITS / 2);
+                sprintf(buf, "%d %d 24", cell_world_x(x) + BLOCK_UNITS / 2,
+                        cell_world_y(y) + BLOCK_UNITS / 2);
                 write_text(job, buf);
-                write_text(job, "\"\n}\n");
+                write_text(job, "\"\n");
+
+                /* every key the user typed in the right panel */
+                {
+                    int k;
+                    int keys = values_count_cell(values, x, y);
+
+                    for (k = 0; k < keys; k++) {
+                        const EntityValue *item = values_cell_at(values, x, y, k);
+                        char line[FGD_NAME_LEN + FGD_VALUE_LEN + 8];
+                        int n;
+
+                        if (item == NULL || item->value[0] == '\0') {
+                            continue;
+                        }
+                        if (strcmp(item->key, "classname") == 0 ||
+                            strcmp(item->key, "origin") == 0) {
+                            continue;
+                        }
+                        n = 0;
+                        n = cat_str_cap(line, (int)sizeof(line), n, "\"");
+                        n = cat_str_cap(line, (int)sizeof(line), n, item->key);
+                        n = cat_str_cap(line, (int)sizeof(line), n, "\" \"");
+                        n = cat_str_cap(line, (int)sizeof(line), n, item->value);
+                        cat_str_cap(line, (int)sizeof(line), n, "\"\n");
+                        write_text(job, line);
+                    }
+                }
+                write_text(job, "}\n");
                 written++;
             }
         }

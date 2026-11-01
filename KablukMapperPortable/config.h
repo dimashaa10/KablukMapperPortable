@@ -46,14 +46,21 @@
 
 #define GRID_MAJOR_EVERY 8 /* every 8th line is brighter (64 units) */
 
-/* Map model, in cells. One cell = one brush = 128x128x128 units. */
-#define MAP_COLS 64
-#define MAP_ROWS 64
+/* Map model, in cells. One cell = one brush = 128x128x128 units.
+ * 32 cells * 128 units = 4096 units per axis, centred on the world origin:
+ * the map runs from -2048 to +2048, which is the range Quake (and the PSP
+ * port later) can handle without running into the +/-4096 world limits. */
+#define MAP_COLS 32
+#define MAP_ROWS 32
 
 /* One editor block. Quake units; a player is 56x56x32 tall, so 128 units
  * is comfortably above it and a sealed crate can be built from it. */
 #define BLOCK_UNITS 128
 #define BLOCK_HEIGHT_UNITS BLOCK_UNITS
+
+/* Whole map, in Quake units: 4096 x 4096, from -2048 to +2048. */
+#define MAP_WORLD_UNITS (MAP_COLS * BLOCK_UNITS)
+#define MAP_HALF_UNITS (MAP_WORLD_UNITS / 2)
 
 /* The map is always sealed while editing: every border cell of the map is
  * meant to be solid (floor, ceiling and walls), so the player can never

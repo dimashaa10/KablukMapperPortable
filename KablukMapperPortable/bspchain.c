@@ -190,7 +190,7 @@ static int run_vis(const char *bsp_path)
 
     if (setjmp(chain_jmp) == 0) {
         chain_armed = 1;
-        rc = tyr_vis_main(4, (const char **)argv);
+        rc = tyr_vis_main(4, argv);
         chain_armed = 0;
     } else {
         rc = 1;

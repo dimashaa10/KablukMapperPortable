@@ -27,9 +27,9 @@ over to `bspchain.c`, which calls one tool per frame:
 | 0 | count blocks and entities | 5 % |
 | 1 | seal check: the shell ring must have no holes | 10 % |
 | 2 | floor and ceiling slabs | 15 % |
-| 3 | open the `.map`, write worldspawn and both slabs | 20 % |
+| 3 | open the `.map`, write worldspawn (name + minlight) and both slabs | 20 % |
 | 4 | merge solid cells into brushes, write them (64 per frame) | 20–80 % |
-| 5 | point entities; worldspawn gets its `light` key (default 200) | 80 % |
+| 5 | point entities, each with the keys set in the property panel | 80 % |
 | 6 | close the file, hand it to the chain | 82 % |
 | 7 | run `QBSP`, `LIGHT`, `VIS` — one tool per frame | 82–99 % |
 | 8 | report `BSP READY: <bytes>` | 100 % |
@@ -50,25 +50,32 @@ they are linked straight into the editor and entered through
 `vendor/tyrutils/README.kabluk.md` for the small patch set that makes that
 possible.
 
-## Numbers on a desktop (max size grid map, 8192 x 8192 units, 145 brushes)
+## Numbers on a desktop (max size grid map, 4096 x 4096 units, 145 brushes)
+
+The map is 32 x 32 cells of 128 units, so world coordinates run from **-2048**
+to **+2048** on both axes; the `.map` the editor writes has exactly that extent
+(x/y -2048..2048, z -16..144).
 
 | stage | peak RSS | time |
 | --- | --- | --- |
-| qbsp | 6.6 MB | 0.15 s |
-| light | 9.0 MB (with its lightmap lump) | 0.15 s |
-| vis | 11.0 MB | 0.05 s |
-| whole chain, first compile | 27 MB | ~0.4 s |
-| the `.bsp` it writes | 1.6 MB, of which 1.2 MB lightmaps | — |
+| qbsp | 2.3 MB | 0.05 s |
+| light | 4.6 MB (with its lightmap lump) | 0.05 s |
+| vis | 5.4 MB | 0.02 s |
+| whole chain inside the editor | 22 MB | ~0.2 s |
+| the `.bsp` it writes | 432 KB, of which 313 KB lightmaps | — |
 
-The lightmap lump is the big one now: 6074 faces, ~200 lumels each. `light`
+The lightmap lump is still the big one: ~2000 faces, ~200 lumels each. `light`
 sizes that buffer from the faces instead of reserving a fixed maximum (see
 `vendor/tyrutils/README.kabluk.md`, step 9), so the memory follows the map
 instead of a guess, and no `.lit` space is reserved unless `-lit` is asked for.
+The 16 MB ceiling left in `MAX_MAP_VISIBILITY` (vis) is upstream and is the
+floor of the chain's peak.
 
 Memory still grows with every compile in the same session (the tools keep
-their pools, upstream assumes one run per process). For the PSP the remaining
-work is: free the tools' pools between runs more aggressively, and run the
-chain in a worker thread so the editor keeps drawing while vis runs.
+their pools, upstream assumes one run per process): about 2 MB per extra
+compile of a map this size. For the PSP the remaining work is: free the tools'
+pools between runs more aggressively, and run the chain in a worker thread so
+the editor keeps drawing while vis runs.
 
 ## A note on lighting
 
@@ -94,7 +101,9 @@ using minlight value 200 from worldspawn.
 1 entities read, 0 are lights.
 ```
 
-The value lives in `compile.h` (`DEFAULT_MINLIGHT`); 200 is the usual "bright
-but still shaded" Quake minlight. Add your own `light` entities from the FGD
+The value lives in `compile.h` (`DEFAULT_MINLIGHT`) as a seed: the editor puts
+it into worldspawn's `light` row when the map is new, and from then on the row
+is yours to edit (`docs/properties.md`). 200 is the usual "bright but still
+shaded" Quake minlight. Add your own `light` entities from the FGD
 when you want pools of real light on top of that floor — the exporter counts
 them (`LIGHT ENTITIES: n`) but never invents one.

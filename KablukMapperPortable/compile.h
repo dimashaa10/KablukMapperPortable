@@ -23,6 +23,7 @@
 #include "fgd.h"
 #include "grid.h"
 #include "settings.h"
+#include "values.h"
 #include "wad.h"
 
 #define COMPILE_LOG_LINES 80
@@ -30,6 +31,9 @@
 
 /* map-wide minimum light written into worldspawn ("light" key, minlight) */
 #define DEFAULT_MINLIGHT 200
+
+/* worldspawn "message": the name the engine shows in the level list */
+#define DEFAULT_MAP_MESSAGE "Kabluk map"
 
 #define COMPILE_IDLE 0
 #define COMPILE_RUNNING 1
@@ -72,11 +76,13 @@ const char *compile_status_text(const CompileJob *job);
 
 /* Clears the log and starts over. */
 void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                   const Settings *settings, const Wad *wad);
+                   const Settings *settings, const Wad *wad,
+                   const ValueStore *values);
 
 /* Advances the job by one chunk; call once per frame while it runs. */
 void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                  const Settings *settings, const Wad *wad);
+                  const Settings *settings, const Wad *wad,
+                  const ValueStore *values);
 
 void compile_log_add(CompileJob *job, const char *line);
 void compile_scroll(CompileJob *job, int delta);

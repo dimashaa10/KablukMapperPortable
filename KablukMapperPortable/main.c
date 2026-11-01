@@ -26,6 +26,7 @@
  *   ESC               quit
  */
 #include <SDL.h>
+#include <stdio.h>
 
 #include "compile.h"
 #include "compileui.h"
@@ -33,6 +34,7 @@
 #include "fgd.h"
 #include "gfx.h"
 #include "grid.h"
+#include "keyboard.h"
 #include "keys.h"
 #include "layout.h"
 #include "menu.h"
@@ -40,6 +42,7 @@
 #include "props.h"
 #include "settings.h"
 #include "textures.h"
+#include "values.h"
 #include "ui.h"
 #include "wad.h"
 
@@ -55,6 +58,8 @@ typedef struct App {
     Textures textures;
     Picker picker;
     PropsView props;
+    ValueStore values;
+    Keyboard kbd;
     CompileJob job;
     CompileUi compile_ui;
 
@@ -63,6 +68,7 @@ typedef struct App {
     int hover_tool;
     int left_open;
     int right_open;
+    int panel_focus; /* arrows + X work on the property list */
     int mouse_x;
     int mouse_y;
 
@@ -74,6 +80,18 @@ typedef struct App {
 /* The editor state is a few hundred kilobytes (fgd text, tex cache), so it
  * lives in static memory instead of the stack - PSP stacks are small. */
 static App app;
+
+/* Values the exporter would use anyway are put into the store, so the right
+ * panel shows them and they can be edited like everything else. */
+static void app_seed_defaults(void)
+{
+    char text[16];
+
+    sprintf(text, "%d", DEFAULT_MINLIGHT);
+    values_set(&app.values, VALUES_WORLD_CX, VALUES_WORLD_CY, "light", text);
+    values_set(&app.values, VALUES_WORLD_CX, VALUES_WORLD_CY, "message",
+               DEFAULT_MAP_MESSAGE);
+}
 
 static void app_refresh_layout(void)
 {
@@ -166,6 +184,73 @@ static void app_move_cursor_to_mouse(void)
     }
 }
 
+/* Opens the on screen keyboard for one property of the shown entity. */
+static void app_edit_property(int index)
+{
+    const FgdProp *prop;
+    const char *value;
+    int cx;
+    int cy;
+
+    if (!app.fgd.loaded || index < 0 || index >= app.fgd.prop_count) {
+        return;
+    }
+    prop = &app.fgd.props[index];
+    props_target_cell(&app.grid, &cx, &cy);
+    value = props_value(prop, &app.values, cx, cy);
+    app.props.sel = index;
+    keyboard_open(&app.kbd, prop->key, value, props_is_numeric(prop), cx, cy);
+}
+
+static void app_handle_keyboard_event(const SDL_Event *event)
+{
+    int result = keyboard_handle_event(&app.kbd, event);
+
+    if (result == KBD_APPLY) {
+        values_set(&app.values, app.kbd.cx, app.kbd.cy, app.kbd.key,
+                   app.kbd.value);
+        keyboard_close(&app.kbd);
+    } else if (result == KBD_CANCEL) {
+        keyboard_close(&app.kbd);
+    }
+}
+
+/* arrows / X while the right panel has the focus */
+static void app_panel_key(SDL_Keycode sym)
+{
+    int count = app.fgd.prop_count;
+
+    if (sym == KEY_CANCEL) {
+        app.panel_focus = 0;
+        return;
+    }
+    if (count <= 0) {
+        return;
+    }
+    if (app.props.sel < 0) {
+        app.props.sel = 0;
+    }
+    if (sym == KEY_DOWN) {
+        if (app.props.sel < count - 1) {
+            app.props.sel++;
+        }
+    } else if (sym == KEY_UP) {
+        if (app.props.sel > 0) {
+            app.props.sel--;
+        }
+    } else if (sym == KEY_CONFIRM) {
+        app_edit_property(app.props.sel);
+        return;
+    }
+    /* keep the highlighted row on screen */
+    if (app.props.sel < app.props.scroll) {
+        app.props.scroll = app.props.sel;
+    }
+    if (app.props.sel >= app.props.scroll + props_visible_rows()) {
+        app.props.scroll = app.props.sel - props_visible_rows() + 1;
+    }
+}
+
 /* X / left click */
 static void app_primary_action(void)
 {
@@ -178,6 +263,11 @@ static void app_primary_action(void)
         break;
     case TOOL_ENTITY:
         if (app.entity_class >= 0) {
+            /* another class in this cell means the values typed for the old
+             * one no longer apply */
+            if (grid_entity_at(&app.grid, cx, cy) != app.entity_class) {
+                values_clear_cell(&app.values, cx, cy);
+            }
             grid_set_entity(&app.grid, cx, cy, app.entity_class);
             grid_select(&app.grid, cx, cy);
         }
@@ -200,6 +290,7 @@ static void app_secondary_action(void)
         break;
     case TOOL_ENTITY:
         grid_set_entity(&app.grid, cx, cy, -1);
+        values_clear_cell(&app.values, cx, cy);
         break;
     default:
         grid_erase(&app.grid, cx, cy);
@@ -209,6 +300,11 @@ static void app_secondary_action(void)
 
 static void app_handle_key(const SDL_KeyboardEvent *key)
 {
+    if (app.panel_focus) {
+        app_panel_key(key->keysym.sym);
+        return;
+    }
+
     switch (key->keysym.sym) {
     case KEY_QUIT:
         app.running = 0;
@@ -229,7 +325,19 @@ static void app_handle_key(const SDL_KeyboardEvent *key)
 
     case KEY_PANEL_RIGHT:
         app.right_open = !app.right_open;
+        app.panel_focus = 0;
         app_refresh_layout();
+        break;
+
+    case KEY_PROP_FOCUS:
+        if (!app.right_open) {
+            app.right_open = 1;
+            app_refresh_layout();
+        }
+        app.panel_focus = 1;
+        if (app.props.sel < 0 && app.fgd.prop_count > 0) {
+            app.props.sel = 0;
+        }
         break;
 
     case KEY_LEFT:
@@ -305,6 +413,12 @@ static void app_handle_event(const SDL_Event *event)
         return;
     }
 
+    /* the keyboard sits on top of every other modal screen */
+    if (keyboard_is_open(&app.kbd)) {
+        app_handle_keyboard_event(event);
+        return;
+    }
+
     /* modal screens take everything while they are open */
     if (menu_is_open(&app.menu)) {
         menu_handle_event(&app.menu, event);
@@ -318,7 +432,8 @@ static void app_handle_event(const SDL_Event *event)
         int action = compileui_handle_event(&app.compile_ui, event, &app.job);
 
         if (action == COMPILEUI_COMPILE) {
-            compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad);
+            compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
+                          &app.values);
         } else if (action == COMPILEUI_BROWSE) {
             menu_open_browse(&app.menu, BROWSE_DIR, MENU_CLOSED);
         } else if (action == COMPILEUI_CLOSE) {
@@ -338,6 +453,10 @@ static void app_handle_event(const SDL_Event *event)
         app_update_mouse();
         app.hover_tool =
             app_over_left_panel() ? ui_hit_test(app.mouse_x, app.mouse_y) : -1;
+        app.props.hover = app_over_right_panel()
+                              ? props_hit_row(&app.fgd, &app.props, app.mouse_x,
+                                              app.mouse_y)
+                              : -1;
         app_move_cursor_to_mouse();
         /* dragging while a button is held paints continuously */
         if ((event->motion.state & SDL_BUTTON_LMASK) != 0) {
@@ -364,8 +483,17 @@ static void app_handle_event(const SDL_Event *event)
             break;
         }
         if (app_over_right_panel()) {
-            break; /* properties are read-only for now */
+            int row = props_hit_row(&app.fgd, &app.props, app.mouse_x,
+                                    app.mouse_y);
+
+            app.panel_focus = 1;
+            if (row >= 0) {
+                app.props.sel = row;
+                app_edit_property(row);
+            }
+            break;
         }
+        app.panel_focus = 0;
 
         app_move_cursor_to_mouse();
         if (event->button.button == SDL_BUTTON_LEFT) {
@@ -395,11 +523,12 @@ static void app_render(void)
         ui_draw_panel(&app.gfx, app.tool, app.hover_tool);
     }
     if (app.right_open) {
-        props_draw(&app.gfx, &app.grid, &app.fgd, &app.props);
+        props_draw(&app.gfx, &app.grid, &app.fgd, &app.props, &app.values);
     }
     picker_draw(&app.gfx, &app.picker, &app.fgd, &app.textures, &app.wad);
     compileui_draw(&app.gfx, &app.compile_ui, &app.job, &app.settings);
     menu_draw(&app.gfx, &app.menu);
+    keyboard_draw(&app.gfx, &app.kbd);
 
     gfx_frame_end(&app.gfx);
 }
@@ -440,6 +569,9 @@ int main(int argc, char *argv[])
     menu_init(&app.menu, &app.settings);
     picker_init(&app.picker);
     props_view_init(&app.props);
+    values_init(&app.values);
+    keyboard_init(&app.kbd);
+    app_seed_defaults();
     compile_init(&app.job);
     compileui_init(&app.compile_ui);
 
@@ -448,6 +580,7 @@ int main(int argc, char *argv[])
     app.hover_tool = -1;
     app.left_open = 1;
     app.right_open = 1;
+    app.panel_focus = 0;
     app.mouse_x = 0;
     app.mouse_y = 0;
     app.current_tex = -1;
@@ -470,7 +603,8 @@ int main(int argc, char *argv[])
 
         /* the compile job runs a small chunk per frame */
         if (compile_is_running(&app.job)) {
-            compile_step(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad);
+            compile_step(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
+                         &app.values);
         }
 
         while (SDL_PollEvent(&event)) {

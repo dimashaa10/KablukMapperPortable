@@ -153,6 +153,8 @@
     <ClCompile Include="wad.c" />
     <ClCompile Include="textures.c" />
     <ClCompile Include="bspchain.c" />
+    <ClCompile Include="keyboard.c" />
+    <ClCompile Include="values.c" />
     <ClCompile Include="vendor\tyrutils\common\bspfile.c">
       <ObjectFileName>$(IntDir)common_bspfile.obj</ObjectFileName>
     </ClCompile>
@@ -221,6 +223,8 @@
     <ClInclude Include="wad.h" />
     <ClInclude Include="textures.h" />
     <ClInclude Include="bspchain.h" />
+    <ClInclude Include="keyboard.h" />
+    <ClInclude Include="values.h" />
     <ClInclude Include="vendor\tyrutils\include\common\bspfile.h" />
     <ClInclude Include="vendor\tyrutils\include\common\cmdlib.h" />
     <ClInclude Include="vendor\tyrutils\include\common\log.h" />

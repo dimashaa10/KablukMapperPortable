@@ -63,11 +63,13 @@ void grid_clear_map(Grid *grid)
 
 void grid_init(Grid *grid)
 {
+    /* start in the middle of the map: the origin of the world is the middle
+     * cell, so that is where the camera and the cursor begin */
     grid_clear_map(grid);
-    grid->cursor_x = 4;
-    grid->cursor_y = 4;
-    grid->cam_x = 0;
-    grid->cam_y = 0;
+    grid->cursor_x = MAP_COLS / 2;
+    grid->cursor_y = MAP_ROWS / 2;
+    grid->cam_x = MAP_COLS / 2 - 7;
+    grid->cam_y = MAP_ROWS / 2 - 8;
 }
 
 void grid_paint(Grid *grid, int cx, int cy, int tex_index)
@@ -360,7 +362,8 @@ static void grid_draw_map_edge(Gfx *g, const Grid *grid, const Layout *layout)
     int sx;
     int sy;
 
-    /* Outline of the whole 64x64 map, drawn only if it is (partly) visible. */
+    /* Outline of the whole map (-2048..2048 units), drawn even when only a
+     * corner of it is on screen. */
     grid_cell_to_screen(grid, 0, 0, &sx, &sy);
     sx += layout->grid_x;
     sy += layout->grid_y;
