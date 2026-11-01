@@ -7,6 +7,7 @@
  */
 #include "menu.h"
 
+#include "compile.h"
 #include "config.h"
 #include "fs.h"
 #include "keys.h"
@@ -14,19 +15,32 @@
 /* ------------------------------------------------------------------ */
 /* Settings window geometry                                            */
 /* ------------------------------------------------------------------ */
-#define SET_X 36
-#define SET_Y 34
-#define SET_W (SCREEN_W - SET_X * 2) /* 408 */
-#define SET_H 204
+#define SET_X 20
+#define SET_Y 14
+#define SET_W (SCREEN_W - SET_X * 2) /* 440 */
+#define SET_H 232
 #define SET_FIELD_H 20
-#define SET_ROW0_Y (SET_Y + 46)
-#define SET_ROW1_Y (SET_Y + 86)
-#define SET_FIELD_X (SET_X + 12)
-#define SET_FIELD_W (SET_W - 24)
+#define SET_TITLE_H 22
+
+#define SET_FIELD_X (SET_X + 12)      /* 32  */
+#define SET_FIELD_W (SET_W - 24)      /* 416 */
+#define SET_HALF_W ((SET_FIELD_W - 8) / 2)     /* 204 */
+#define SET_HALF2_X (SET_FIELD_X + SET_HALF_W + 8)
+
+#define SET_ROW_GAP 34
+#define SET_ROW0_Y (SET_Y + 36) /* wad        */
+#define SET_ROW1_Y (SET_ROW0_Y + SET_ROW_GAP)
+#define SET_ROW2_Y (SET_ROW1_Y + SET_ROW_GAP)
+#define SET_ROW3_Y (SET_ROW2_Y + SET_ROW_GAP) /* floor + ceiling */
+
+#define SET_BTN_Y (SET_Y + 164)
+#define SET_BTN_H 22
+#define SET_SAVE_W 120
+#define SET_SAVE_X SET_FIELD_X
 #define SET_CLOSE_W 84
-#define SET_CLOSE_H 22
 #define SET_CLOSE_X (SET_X + SET_W - 12 - SET_CLOSE_W)
-#define SET_CLOSE_Y (SET_Y + SET_H - 12 - SET_CLOSE_H)
+#define SET_HINT_Y (SET_BTN_Y + SET_BTN_H + 6)
+#define SET_STATUS_Y (SET_HINT_Y + 24)
 
 /* ------------------------------------------------------------------ */
 /* File browser geometry                                               */
@@ -40,6 +54,12 @@
 #define BR_LIST_Y (BR_Y + 44)
 #define BR_ROW_H 14
 #define BR_ROW_TOP (BR_LIST_Y - 3)
+
+/* "NEW FOLDER" button, in the title row on the right */
+#define BR_NEW_W 96
+#define BR_NEW_H 16
+#define BR_NEW_X (BR_X + BR_W - 10 - BR_NEW_W)
+#define BR_NEW_Y (BR_Y + 4)
 
 static void browse_open(Menu *menu, int target);
 
@@ -94,10 +114,13 @@ static void menu_itoa(char *out, int value)
 /* ------------------------------------------------------------------ */
 /* Life cycle                                                          */
 /* ------------------------------------------------------------------ */
-void menu_init(Menu *menu, Settings *settings)
+void menu_init(Menu *menu, Settings *settings, const struct CompileJob *job)
 {
     menu->mode = MENU_CLOSED;
     menu->settings = settings;
+    menu->job = job;
+    menu->request = MENU_REQUEST_NONE;
+    menu->status[0] = '\0';
     menu->sel = MENU_ROW_WAD;
     menu->hover = -1;
     menu->browse_target = BROWSE_WAD;
@@ -261,10 +284,108 @@ static int settings_hit(int mx, int my)
     if (menu_in_rect(mx, my, SET_FIELD_X, SET_ROW1_Y, SET_FIELD_W, SET_FIELD_H)) {
         return MENU_ROW_OUT;
     }
-    if (menu_in_rect(mx, my, SET_CLOSE_X, SET_CLOSE_Y, SET_CLOSE_W, SET_CLOSE_H)) {
+    if (menu_in_rect(mx, my, SET_FIELD_X, SET_ROW2_Y, SET_FIELD_W, SET_FIELD_H)) {
+        return MENU_ROW_NAME;
+    }
+    if (menu_in_rect(mx, my, SET_FIELD_X, SET_ROW3_Y, SET_HALF_W, SET_FIELD_H)) {
+        return MENU_ROW_FLOOR;
+    }
+    if (menu_in_rect(mx, my, SET_HALF2_X, SET_ROW3_Y, SET_HALF_W, SET_FIELD_H)) {
+        return MENU_ROW_CEILING;
+    }
+    if (menu_in_rect(mx, my, SET_SAVE_X, SET_BTN_Y, SET_SAVE_W, SET_BTN_H)) {
+        return MENU_ROW_SAVE;
+    }
+    if (menu_in_rect(mx, my, SET_CLOSE_X, SET_BTN_Y, SET_CLOSE_W, SET_BTN_H)) {
         return MENU_ROW_CLOSE;
     }
     return -1;
+}
+
+/* what a settings row does when it is confirmed */
+static void settings_activate(Menu *menu, int row)
+{
+    switch (row) {
+    case MENU_ROW_WAD:
+        browse_open(menu, BROWSE_WAD);
+        break;
+    case MENU_ROW_OUT:
+        browse_open(menu, BROWSE_DIR);
+        break;
+    case MENU_ROW_NAME:
+        menu->request = MENU_REQUEST_NAME;
+        break;
+    case MENU_ROW_FLOOR:
+        menu->request = MENU_REQUEST_FLOOR;
+        break;
+    case MENU_ROW_CEILING:
+        menu->request = MENU_REQUEST_CEILING;
+        break;
+    case MENU_ROW_SAVE:
+        menu->request = MENU_REQUEST_SAVE;
+        break;
+    default:
+        menu_close(menu);
+        break;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Results of what main.c did for a request                            */
+/* ------------------------------------------------------------------ */
+static void menu_status(Menu *menu, const char *prefix, const char *text)
+{
+    char line[MENU_STATUS_LEN];
+    int n = 0;
+    int i;
+
+    for (i = 0; prefix[i] != '\0' && n < MENU_STATUS_LEN - 1; i++) {
+        line[n++] = prefix[i];
+    }
+    for (i = 0; text[i] != '\0' && n < MENU_STATUS_LEN - 1; i++) {
+        line[n++] = text[i];
+    }
+    line[n] = '\0';
+    fs_copy(menu->status, MENU_STATUS_LEN, line);
+}
+
+void menu_set_map_name(Menu *menu, const char *name)
+{
+    fs_sanitize_name(menu->settings->map_name, FS_NAME_LEN, name);
+    menu_status(menu, "NAME: ", menu->settings->map_name[0] != '\0'
+                                   ? menu->settings->map_name
+                                   : DEFAULT_MAP_NAME);
+}
+
+void menu_create_folder(Menu *menu, const char *name)
+{
+    char clean[FS_NAME_LEN];
+    char full[PATH_LEN];
+
+    fs_sanitize_name(clean, (int)sizeof(clean), name);
+    if (clean[0] == '\0') {
+        fs_copy(menu->status, MENU_STATUS_LEN, "NO FOLDER NAME GIVEN");
+        return;
+    }
+    fs_join(full, PATH_LEN, menu->path, clean);
+    if (fs_mkdir(full)) {
+        menu_status(menu, "NEW FOLDER: ", clean);
+        browse_refresh(menu);
+        menu->mode = MENU_BROWSE;
+    } else {
+        menu_status(menu, "CANNOT CREATE: ", clean);
+    }
+}
+
+void menu_set_texture(Menu *menu, int ceiling, const char *name)
+{
+    if (ceiling) {
+        fs_copy(menu->settings->ceiling_tex, WAD_NAME_LEN, name);
+    } else {
+        fs_copy(menu->settings->floor_tex, WAD_NAME_LEN, name);
+    }
+    menu->mode = MENU_SETTINGS;
+    menu_status(menu, ceiling ? "CEILING: " : "FLOOR: ", name);
 }
 
 /* ------------------------------------------------------------------ */
@@ -304,15 +425,15 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
             return 1;
         case KEY_CONFIRM:
             if (menu->mode == MENU_SETTINGS) {
-                if (menu->sel == MENU_ROW_WAD) {
-                    browse_open(menu, BROWSE_WAD);
-                } else if (menu->sel == MENU_ROW_OUT) {
-                    browse_open(menu, BROWSE_DIR);
-                } else {
-                    menu_close(menu);
-                }
+                settings_activate(menu, menu->sel);
             } else {
                 browse_activate(menu, menu->cur);
+            }
+            return 1;
+        case KEY_NEW_FOLDER:
+            if (menu->mode == MENU_BROWSE) {
+                menu->request = MENU_REQUEST_FOLDER;
+                return 1;
             }
             return 1;
         case KEY_CANCEL:
@@ -340,13 +461,13 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
         }
         if (menu->mode == MENU_SETTINGS) {
             hit = settings_hit(event->button.x, event->button.y);
-            if (hit == MENU_ROW_WAD) {
-                browse_open(menu, BROWSE_WAD);
-            } else if (hit == MENU_ROW_OUT) {
-                browse_open(menu, BROWSE_DIR);
-            } else if (hit == MENU_ROW_CLOSE) {
-                menu_close(menu);
+            if (hit >= 0) {
+                menu->sel = hit;
+                settings_activate(menu, hit);
             }
+        } else if (menu_in_rect(event->button.x, event->button.y, BR_NEW_X,
+                                BR_NEW_Y, BR_NEW_W, BR_NEW_H)) {
+            menu->request = MENU_REQUEST_FOLDER;
         } else {
             hit = browse_hit(menu, event->button.x, event->button.y);
             if (hit >= 0) {
@@ -370,57 +491,114 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
 /* ------------------------------------------------------------------ */
 /* Drawing                                                             */
 /* ------------------------------------------------------------------ */
-static void draw_field(Gfx *g, int y, const char *label, const char *value,
-                       const char *empty_text, int selected)
+static void draw_field(Gfx *g, int x, int w, int y, const char *label,
+                       const char *value, const char *empty_text, int selected,
+                       const char *action)
 {
-    gfx_text(g, SET_FIELD_X, y - 11, label, COL_TEXT_DIM, 1);
+    gfx_text(g, x, y - 10, label, COL_TEXT_DIM, 1);
 
-    gfx_rect(g, SET_FIELD_X, y, SET_FIELD_W, SET_FIELD_H, COL_FIELD);
-    gfx_outline(g, SET_FIELD_X, y, SET_FIELD_W, SET_FIELD_H,
-                selected ? COL_ACCENT : COL_BTN_EDGE);
+    gfx_rect(g, x, y, w, SET_FIELD_H, COL_FIELD);
+    gfx_outline(g, x, y, w, SET_FIELD_H, selected ? COL_ACCENT : COL_BTN_EDGE);
 
-    if (value != NULL && value[0] != '\0') {
-        gfx_text_clip(g, SET_FIELD_X + 6, y + 7, SET_FIELD_W - 40, value, COL_TEXT, 1);
-    } else {
-        gfx_text(g, SET_FIELD_X + 6, y + 7, empty_text, COL_TEXT_DIM, 1);
+    if (action != NULL && action[0] != '\0') {
+        int waction = gfx_text_width(action, 1);
+
+        if (value != NULL && value[0] != '\0') {
+            gfx_text_clip(g, x + 6, y + 7, w - waction - 16, value, COL_TEXT, 1);
+        } else {
+            gfx_text(g, x + 6, y + 7, empty_text, COL_TEXT_DIM, 1);
+        }
+        gfx_text_right(g, x + w - 6, y + 7, action,
+                       selected ? COL_ACCENT : COL_TEXT_DIM, 1);
+        return;
     }
 
-    gfx_text_right(g, SET_FIELD_X + SET_FIELD_W - 6, y + 7, "BROWSE",
-                   selected ? COL_ACCENT : COL_TEXT_DIM, 1);
+    if (value != NULL && value[0] != '\0') {
+        gfx_text_clip(g, x + 6, y + 7, w - 12, value, COL_TEXT, 1);
+    } else {
+        gfx_text(g, x + 6, y + 7, empty_text, COL_TEXT_DIM, 1);
+    }
+}
+
+static void draw_button(Gfx *g, int x, int y, int w, int h, const char *label,
+                        int active)
+{
+    int label_w = gfx_text_width(label, 1);
+
+    gfx_rect(g, x, y, w, h, active ? COL_BTN_ACTIVE : COL_BTN);
+    gfx_outline(g, x, y, w, h, active ? COL_BTN_EDGE_ACTIVE : COL_BTN_EDGE);
+    gfx_text(g, x + (w - label_w) / 2, y + 7, label,
+             active ? COL_ACCENT : COL_TEXT, 1);
+}
+
+/* One status line: the running "save the map source" job if there is one,
+ * otherwise whatever the last action reported. */
+static void draw_status(Gfx *g, const Menu *menu, int x, int y, int w)
+{
+    const struct CompileJob *job = menu->job;
+
+    if (job != NULL && job->save_only) {
+        if (job->state == COMPILE_RUNNING) {
+            gfx_text(g, x, y, "SAVING...", COL_TEXT_DIM, 1);
+            return;
+        }
+        if (job->state == COMPILE_DONE) {
+            gfx_text_clip(g, x, y, w, job->map_path, COL_OK, 1);
+            return;
+        }
+        if (job->state == COMPILE_FAILED) {
+            gfx_text_clip(g, x, y, w, "COULD NOT WRITE THE .MAP", COL_WARN, 1);
+            return;
+        }
+    }
+    if (menu->status[0] != '\0') {
+        gfx_text_clip(g, x, y, w, menu->status, COL_TEXT_DIM, 1);
+    }
 }
 
 static void draw_settings(Gfx *g, const Menu *menu)
 {
     int close_hover;
-    int label_w;
+    int save_hover;
 
     gfx_rect(g, SET_X, SET_Y, SET_W, SET_H, COL_PANEL);
     gfx_outline(g, SET_X, SET_Y, SET_W, SET_H, COL_ACCENT);
 
-    gfx_rect(g, SET_X + 1, SET_Y + 1, SET_W - 2, 22, COL_BTN);
+    gfx_rect(g, SET_X + 1, SET_Y + 1, SET_W - 2, SET_TITLE_H, COL_BTN);
     gfx_text(g, SET_X + 10, SET_Y + 8, "EDITOR SETTINGS", COL_ACCENT, 1);
-    gfx_text_right(g, SET_X + SET_W - 10, SET_Y + 8, "[SELECT] CLOSE", COL_TEXT_DIM, 1);
+    gfx_text_right(g, SET_X + SET_W - 10, SET_Y + 8, "[SELECT] CLOSE", COL_TEXT_DIM,
+                   1);
 
-    draw_field(g, SET_ROW0_Y, "WAD FILE  (TEXTURES)", menu->settings->wad_path,
-               "( NOT SET )", menu->sel == MENU_ROW_WAD);
-    draw_field(g, SET_ROW1_Y, "COMPILED MAPS GO TO", menu->settings->out_dir,
-               "CURRENT FOLDER", menu->sel == MENU_ROW_OUT);
+    draw_field(g, SET_FIELD_X, SET_FIELD_W, SET_ROW0_Y, "WAD FILE  (TEXTURES)",
+               menu->settings->wad_path, "( NOT SET )", menu->sel == MENU_ROW_WAD,
+               "BROWSE");
+    draw_field(g, SET_FIELD_X, SET_FIELD_W, SET_ROW1_Y, "COMPILED FILES GO TO",
+               menu->settings->out_dir, "CURRENT FOLDER",
+               menu->sel == MENU_ROW_OUT, "BROWSE");
+    draw_field(g, SET_FIELD_X, SET_FIELD_W, SET_ROW2_Y,
+               "MAP SOURCE NAME  (.MAP, .BSP)", menu->settings->map_name,
+               "( " DEFAULT_MAP_NAME " )", menu->sel == MENU_ROW_NAME, "TYPE");
 
-    gfx_text(g, SET_FIELD_X, SET_ROW1_Y + SET_FIELD_H + 12,
-             "THE WAD PROVIDES TEXTURES AND PALETTE,", COL_TEXT_DIM, 1);
-    gfx_text(g, SET_FIELD_X, SET_ROW1_Y + SET_FIELD_H + 24,
-             "COMPILED MAPS ARE WRITTEN TO THE FOLDER.", COL_TEXT_DIM, 1);
+    draw_field(g, SET_FIELD_X, SET_HALF_W, SET_ROW3_Y, "FLOOR TEXTURE",
+               menu->settings->floor_tex, "( FIRST IN WAD )",
+               menu->sel == MENU_ROW_FLOOR, "PICK");
+    draw_field(g, SET_HALF2_X, SET_HALF_W, SET_ROW3_Y, "CEILING TEXTURE",
+               menu->settings->ceiling_tex, "( FIRST IN WAD )",
+               menu->sel == MENU_ROW_CEILING, "PICK");
 
-    gfx_text(g, SET_FIELD_X, SET_CLOSE_Y + 7, "[X] BROWSE", COL_TEXT_DIM, 1);
-
+    save_hover = (menu->sel == MENU_ROW_SAVE) || (menu->hover == MENU_ROW_SAVE);
+    draw_button(g, SET_SAVE_X, SET_BTN_Y, SET_SAVE_W, SET_BTN_H, "SAVE .MAP",
+                save_hover);
     close_hover = (menu->sel == MENU_ROW_CLOSE) || (menu->hover == MENU_ROW_CLOSE);
-    gfx_rect(g, SET_CLOSE_X, SET_CLOSE_Y, SET_CLOSE_W, SET_CLOSE_H,
-             close_hover ? COL_BTN_ACTIVE : COL_BTN);
-    gfx_outline(g, SET_CLOSE_X, SET_CLOSE_Y, SET_CLOSE_W, SET_CLOSE_H,
-                close_hover ? COL_BTN_EDGE_ACTIVE : COL_BTN_EDGE);
-    label_w = gfx_text_width("CLOSE", 1);
-    gfx_text(g, SET_CLOSE_X + (SET_CLOSE_W - label_w) / 2, SET_CLOSE_Y + 7, "CLOSE",
-             close_hover ? COL_ACCENT : COL_TEXT, 1);
+    draw_button(g, SET_CLOSE_X, SET_BTN_Y, SET_CLOSE_W, SET_BTN_H, "CLOSE",
+                close_hover);
+
+    gfx_text(g, SET_FIELD_X, SET_HINT_Y,
+             "NAME = THE .MAP WRITTEN TO THAT FOLDER,", COL_TEXT_DIM, 1);
+    gfx_text(g, SET_FIELD_X, SET_HINT_Y + 12,
+             "EMPTY TEXTURES USE THE FIRST ONE IN THE WAD.", COL_TEXT_DIM, 1);
+
+    draw_status(g, menu, SET_FIELD_X, SET_STATUS_Y, SET_FIELD_W);
 }
 
 static void draw_entry_label(char *out, int cap, const FsEntry *entry)
@@ -462,18 +640,9 @@ static void draw_browse(Gfx *g, const Menu *menu)
                                                : "SELECT OUTPUT FOLDER",
              COL_ACCENT, 1);
 
-    /* "N ENTRIES" counter, top right */
-    {
-        char num[16];
-        int wnum;
-        int wtext;
-
-        menu_itoa(num, menu->count);
-        wnum = gfx_text_width(num, 1);
-        wtext = gfx_text_width(" ENTRIES", 1);
-        gfx_text(g, BR_X + BR_W - 10 - wtext - wnum, BR_Y + 8, num, COL_TEXT, 1);
-        gfx_text(g, BR_X + BR_W - 10 - wtext, BR_Y + 8, " ENTRIES", COL_TEXT_DIM, 1);
-    }
+    /* "NEW FOLDER" button, top right */
+    draw_button(g, BR_NEW_X, BR_NEW_Y, BR_NEW_W, BR_NEW_H, "NEW FOLDER",
+                menu->request == MENU_REQUEST_FOLDER);
 
     /* current path */
     gfx_rect(g, BR_X + 8, BR_PATH_Y, BR_W - 16, BR_PATH_H, COL_FIELD);
@@ -515,8 +684,25 @@ static void draw_browse(Gfx *g, const Menu *menu)
         gfx_text(g, BR_X + 14, BR_LIST_Y + 4, "NOTHING HERE", COL_TEXT_DIM, 1);
     }
 
-    gfx_text(g, BR_X + 10, BR_Y + BR_H - 16, "[UP/DOWN] MOVE   [X] SELECT   [Z] BACK",
+    draw_status(g, menu, BR_X + 10, BR_Y + BR_H - 32, BR_W - 20);
+    gfx_text(g, BR_X + 10, BR_Y + BR_H - 16,
+             "[UP/DOWN] MOVE   [X] SELECT   [N] NEW FOLDER   [Z] BACK",
              COL_TEXT_DIM, 1);
+
+    /* "N ENTRIES", bottom right */
+    {
+        char num[16];
+        int wnum;
+        int wtext;
+
+        menu_itoa(num, menu->count);
+        wnum = gfx_text_width(num, 1);
+        wtext = gfx_text_width(" ENTRIES", 1);
+        gfx_text(g, BR_X + BR_W - 10 - wtext - wnum, BR_Y + BR_H - 16, num,
+                 COL_TEXT, 1);
+        gfx_text(g, BR_X + BR_W - 10 - wtext, BR_Y + BR_H - 16, " ENTRIES",
+                 COL_TEXT_DIM, 1);
+    }
 }
 
 void menu_draw(Gfx *g, const Menu *menu)

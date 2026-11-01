@@ -23,6 +23,8 @@
 
 #define KEY_PROP_FOCUS SDLK_f /* jump into the right panel to edit values */
 
+#define KEY_NEW_FOLDER SDLK_n /* file browser: create a folder */
+
 #define KEY_OPEN_SETTINGS SDLK_RETURN /* PSP: SELECT - editor settings */
 #define KEY_OPEN_COMPILE SDLK_F2      /* PSP: START - compile map      */
 

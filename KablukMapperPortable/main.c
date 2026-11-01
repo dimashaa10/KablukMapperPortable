@@ -7,8 +7,9 @@
  *   - plain C, no WinAPI, no SDL_ttf, no dynamic memory
  *   - entity definitions come from Quake.fgd, textures from the .wad chosen
  *     in the editor settings
- *   - one cell is one 128x128x128 unit block and the map always keeps its
- *     floor/ceiling shell, so nothing can leak into the void
+ *   - one cell is one 128x128x128 unit block; the exporter adds the floor,
+ *     the ceiling and the walls that seal the map (compile.c), so the grid
+ *     starts empty and nothing can leak into the void
  *
  * Tools (left panel):
  *   SELECT   - click a point entity to show its properties on the right
@@ -80,6 +81,13 @@ typedef struct App {
 /* The editor state is a few hundred kilobytes (fgd text, tex cache), so it
  * lives in static memory instead of the stack - PSP stacks are small. */
 static App app;
+
+/* who asked for the on screen keyboard */
+#define KBD_FOR_PROPERTY 0
+#define KBD_FOR_MAP_NAME 1
+#define KBD_FOR_FOLDER 2
+
+static int kbd_for = KBD_FOR_PROPERTY;
 
 /* Values the exporter would use anyway are put into the store, so the right
  * panel shows them and they can be edited like everything else. */
@@ -161,6 +169,74 @@ static void app_reload_wad(void)
     picker_close(&app.picker);
 }
 
+/* index of a texture name in the loaded wad, -1 when it is not there */
+static int app_tex_index(const char *name)
+{
+    int i;
+
+    if (name == NULL || name[0] == '\0') {
+        return -1;
+    }
+    for (i = 0; i < app.wad.count && i < WAD_MAX_TEX; i++) {
+        const char *tex = app.wad.names[i];
+        int c = 0;
+
+        while (tex[c] != '\0' && name[c] != '\0' &&
+               (tex[c] == name[c] ||
+                (tex[c] | 0x20) == (name[c] | 0x20))) {
+            c++;
+        }
+        if (tex[c] == '\0' && name[c] == '\0') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* The menu asked for a keyboard, the texture list, or a save. */
+static void app_handle_menu_request(void)
+{
+    int request = app.menu.request;
+
+    if (request == MENU_REQUEST_NONE) {
+        return;
+    }
+    app.menu.request = MENU_REQUEST_NONE;
+
+    switch (request) {
+    case MENU_REQUEST_NAME:
+        kbd_for = KBD_FOR_MAP_NAME;
+        keyboard_open(&app.kbd, "MAP NAME", app.settings.map_name, 0, -1, -1);
+        break;
+    case MENU_REQUEST_FOLDER:
+        kbd_for = KBD_FOR_FOLDER;
+        keyboard_open(&app.kbd, "FOLDER NAME", "", 0, -1, -1);
+        break;
+    case MENU_REQUEST_FLOOR:
+    case MENU_REQUEST_CEILING:
+        if (app.wad.count <= 0) {
+            SDL_Log("No wad loaded: pick one in the settings first");
+            break;
+        }
+        app.picker.target = request == MENU_REQUEST_FLOOR ? PICK_TARGET_FLOOR
+                                                          : PICK_TARGET_CEILING;
+        picker_open_textures(&app.picker, &app.wad,
+                             app_tex_index(request == MENU_REQUEST_FLOOR
+                                               ? app.settings.floor_tex
+                                               : app.settings.ceiling_tex));
+        break;
+    case MENU_REQUEST_SAVE:
+        if (compile_is_running(&app.job)) {
+            break;
+        }
+        compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
+                      1);
+        break;
+    default:
+        break;
+    }
+}
+
 static void app_select_tool(int tool)
 {
     app.tool = tool;
@@ -199,6 +275,7 @@ static void app_edit_property(int index)
     props_target_cell(&app.grid, &cx, &cy);
     value = props_value(prop, &app.values, cx, cy);
     app.props.sel = index;
+    kbd_for = KBD_FOR_PROPERTY;
     keyboard_open(&app.kbd, prop->key, value, props_is_numeric(prop), cx, cy);
 }
 
@@ -207,8 +284,14 @@ static void app_handle_keyboard_event(const SDL_Event *event)
     int result = keyboard_handle_event(&app.kbd, event);
 
     if (result == KBD_APPLY) {
-        values_set(&app.values, app.kbd.cx, app.kbd.cy, app.kbd.key,
-                   app.kbd.value);
+        if (kbd_for == KBD_FOR_MAP_NAME) {
+            menu_set_map_name(&app.menu, app.kbd.value);
+        } else if (kbd_for == KBD_FOR_FOLDER) {
+            menu_create_folder(&app.menu, app.kbd.value);
+        } else {
+            values_set(&app.values, app.kbd.cx, app.kbd.cy, app.kbd.key,
+                       app.kbd.value);
+        }
         keyboard_close(&app.kbd);
     } else if (result == KBD_CANCEL) {
         keyboard_close(&app.kbd);
@@ -384,6 +467,7 @@ static void app_handle_key(const SDL_KeyboardEvent *key)
 static void app_handle_picker_result(int result)
 {
     if (result == PICKER_EVENT_CANCEL) {
+        app.picker.target = PICK_TARGET_BLOCK;
         picker_close(&app.picker);
         return;
     }
@@ -395,6 +479,16 @@ static void app_handle_picker_result(int result)
             app.entity_class = app.picker.index[app.picker.cur];
         }
         app.tool = TOOL_ENTITY;
+    } else if (app.picker.target == PICK_TARGET_FLOOR ||
+               app.picker.target == PICK_TARGET_CEILING) {
+        /* the settings window is still open under the list */
+        if (app.picker.count > 0) {
+            menu_set_texture(&app.menu, app.picker.target == PICK_TARGET_CEILING,
+                             app.wad.names[app.picker.cur]);
+        }
+        app.picker.target = PICK_TARGET_BLOCK;
+        picker_close(&app.picker);
+        return;
     } else {
         if (app.picker.count > 0) {
             app.current_tex = app.picker.cur;
@@ -419,13 +513,15 @@ static void app_handle_event(const SDL_Event *event)
         return;
     }
 
-    /* modal screens take everything while they are open */
-    if (menu_is_open(&app.menu)) {
-        menu_handle_event(&app.menu, event);
-        return;
-    }
+    /* modal screens take everything while they are open; the list can sit on
+     * top of the settings window, so it is asked first */
     if (picker_is_open(&app.picker)) {
         app_handle_picker_result(picker_handle_event(&app.picker, event));
+        return;
+    }
+    if (menu_is_open(&app.menu)) {
+        menu_handle_event(&app.menu, event);
+        app_handle_menu_request();
         return;
     }
     if (compileui_is_open(&app.compile_ui)) {
@@ -433,7 +529,7 @@ static void app_handle_event(const SDL_Event *event)
 
         if (action == COMPILEUI_COMPILE) {
             compile_start(&app.job, &app.grid, &app.fgd, &app.settings,
-                          &app.wad);
+                          &app.wad, 0);
         } else if (action == COMPILEUI_BROWSE) {
             menu_open_browse(&app.menu, BROWSE_DIR, MENU_CLOSED);
         } else if (action == COMPILEUI_CLOSE) {
@@ -566,7 +662,7 @@ int main(int argc, char *argv[])
     app.window = window;
     grid_init(&app.grid);
     settings_defaults(&app.settings);
-    menu_init(&app.menu, &app.settings);
+    menu_init(&app.menu, &app.settings, &app.job);
     picker_init(&app.picker);
     props_view_init(&app.props);
     values_init(&app.values);

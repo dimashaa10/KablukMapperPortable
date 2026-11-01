@@ -10,8 +10,10 @@
 #include "fs.h"
 
 #include <string.h>
+#include <errno.h>
 
 #ifdef _WIN32
+#include <direct.h> /* _mkdir */
 #include <io.h>
 #include <stdint.h>
 #define FS_SEP '\\'
@@ -25,6 +27,64 @@
 static int fs_is_sep(char c)
 {
     return c == '/' || c == '\\';
+}
+
+int fs_mkdir(const char *path)
+{
+    if (path == NULL || path[0] == '\0') {
+        return 0;
+    }
+#ifdef _WIN32
+    if (_mkdir(path) == 0) {
+        return 1;
+    }
+    /* ERROR_ALREADY_EXISTS: the folder is there, which is what we wanted */
+    return errno == EEXIST;
+#else
+    if (mkdir(path, 0777) == 0) {
+        return 1;
+    }
+    return errno == EEXIST;
+#endif
+}
+
+static int fs_name_char_ok(char c)
+{
+    if (c >= 'a' && c <= 'z') {
+        return 1;
+    }
+    if (c >= 'A' && c <= 'Z') {
+        return 1;
+    }
+    if (c >= '0' && c <= '9') {
+        return 1;
+    }
+    return c == '_' || c == '-' || c == '.' || c == ' ' || c == '(' ||
+           c == ')' || c == '+';
+}
+
+void fs_sanitize_name(char *dst, int cap, const char *src)
+{
+    int i = 0;
+    int out = 0;
+
+    if (dst == NULL || cap <= 0) {
+        return;
+    }
+    dst[0] = '\0';
+    if (src == NULL) {
+        return;
+    }
+    while (src[i] != '\0' && out < cap - 1) {
+        char c = src[i++];
+
+        dst[out++] = fs_name_char_ok(c) ? c : '_';
+    }
+    /* Windows silently drops trailing dots and spaces, so do it ourselves */
+    while (out > 0 && (dst[out - 1] == '.' || dst[out - 1] == ' ')) {
+        out--;
+    }
+    dst[out] = '\0';
 }
 
 void fs_copy(char *dst, int cap, const char *src)

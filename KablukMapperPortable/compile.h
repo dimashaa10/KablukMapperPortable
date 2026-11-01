@@ -54,6 +54,8 @@ typedef struct CompileJob {
 
     int brush_total;
     int brush_done;
+    int wall_total;   /* wall runs the exporter adds around the empty border */
+    int save_only;    /* 1 = write the .map and stop, do not run the tools */
     int entity_total;
     int entity_done;
 
@@ -75,9 +77,11 @@ int compile_is_running(const CompileJob *job);
 const char *compile_status_text(const CompileJob *job);
 
 /* Clears the log and starts over. The values the user typed are handed to
- * compile_step, which is where the .map gets written. */
+ * compile_step, which is where the .map gets written.
+ * save_only = 1 writes the .map source and stops there ("save as", from the
+ * editor settings); 0 also runs qbsp -> light -> vis. */
 void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                   const Settings *settings, const Wad *wad);
+                   const Settings *settings, const Wad *wad, int save_only);
 
 /* Advances the job by one chunk; call once per frame while it runs. */
 void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,

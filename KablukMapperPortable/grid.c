@@ -16,32 +16,9 @@ static int clamp_int(int v, int lo, int hi)
     return v;
 }
 
-int grid_is_shell(int cx, int cy)
+int grid_is_border(int cx, int cy)
 {
     return (cx <= 0 || cy <= 0 || cx >= MAP_COLS - 1 || cy >= MAP_ROWS - 1);
-}
-
-void grid_build_shell(Grid *grid)
-{
-    int x;
-    int y;
-
-    for (x = 0; x < MAP_COLS; x++) {
-        grid->solid[0][x] = CELL_SOLID;
-        grid->solid[MAP_ROWS - 1][x] = CELL_SOLID;
-        grid->tex[0][x] = TEX_NONE;
-        grid->tex[MAP_ROWS - 1][x] = TEX_NONE;
-        grid->entity[0][x] = 0;
-        grid->entity[MAP_ROWS - 1][x] = 0;
-    }
-    for (y = 0; y < MAP_ROWS; y++) {
-        grid->solid[y][0] = CELL_SOLID;
-        grid->solid[y][MAP_COLS - 1] = CELL_SOLID;
-        grid->tex[y][0] = TEX_NONE;
-        grid->tex[y][MAP_COLS - 1] = TEX_NONE;
-        grid->entity[y][0] = 0;
-        grid->entity[y][MAP_COLS - 1] = 0;
-    }
 }
 
 void grid_clear_map(Grid *grid)
@@ -58,7 +35,6 @@ void grid_clear_map(Grid *grid)
     }
     grid->sel_x = -1;
     grid->sel_y = -1;
-    grid_build_shell(grid);
 }
 
 void grid_init(Grid *grid)
@@ -100,9 +76,6 @@ void grid_erase(Grid *grid, int cx, int cy)
     if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
         return;
     }
-    if (grid_is_shell(cx, cy)) {
-        return; /* the shell stays: no holes into the void */
-    }
     grid->solid[cy][cx] = CELL_EMPTY;
     grid->tex[cy][cx] = TEX_NONE;
     if (grid->sel_x == cx && grid->sel_y == cy) {
@@ -130,9 +103,6 @@ void grid_set_entity(Grid *grid, int cx, int cy, int class_index)
 {
     if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
         return;
-    }
-    if (grid_is_shell(cx, cy)) {
-        return; /* entities do not belong in the sealing shell */
     }
     if (class_index < 0 || class_index > 254) {
         grid->entity[cy][cx] = 0;

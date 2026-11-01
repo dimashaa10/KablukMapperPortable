@@ -29,6 +29,14 @@ typedef struct FsEntry {
  * Returns the number of entries written. */
 int fs_list_dir(const char *path, const char *ext, FsEntry *out, int max);
 
+/* Creates one directory. Returns 1 when it exists afterwards, 0 on error. */
+int fs_mkdir(const char *path);
+
+/* Turns anything the user typed into a file/directory name: path separators,
+ * ':' and characters Windows rejects become '_', trailing dots and spaces are
+ * dropped. Nothing left means an empty string back. */
+void fs_sanitize_name(char *dst, int cap, const char *src);
+
 void fs_copy(char *dst, int cap, const char *src);
 void fs_join(char *out, int cap, const char *base, const char *name);
 void fs_parent(char *path, int cap);

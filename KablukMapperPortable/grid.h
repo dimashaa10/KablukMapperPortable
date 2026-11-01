@@ -38,13 +38,13 @@ typedef struct Grid {
 } Grid;
 
 void grid_init(Grid *grid);
-void grid_clear_map(Grid *grid);   /* empty map + fresh shell */
-void grid_build_shell(Grid *grid); /* solid border ring: floor/ceiling/walls */
+void grid_clear_map(Grid *grid); /* empty map, no pre-placed walls */
 
-int grid_is_shell(int cx, int cy);
+/* 1 for the outermost ring of cells. Nothing is reserved there: the exporter
+ * walls off the border cells the user left empty (see compile.c). */
+int grid_is_border(int cx, int cy);
 
-/* Blocks. Erasing a shell cell is ignored - that is what keeps the map
- * sealed. */
+/* Blocks, free everywhere - the exporter adds the sealing walls. */
 void grid_paint(Grid *grid, int cx, int cy, int tex_index);
 void grid_set_cell(Grid *grid, int cx, int cy, unsigned char value);
 void grid_erase(Grid *grid, int cx, int cy);

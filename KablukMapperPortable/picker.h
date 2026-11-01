@@ -19,6 +19,11 @@
 #define PICK_ENTITY 1
 #define PICK_TEXTURE 2
 
+/* where a picked texture goes: a new block, or one of the two slabs */
+#define PICK_TARGET_BLOCK 0
+#define PICK_TARGET_FLOOR 1
+#define PICK_TARGET_CEILING 2
+
 #define PICKER_EVENT_NONE 0
 #define PICKER_EVENT_CONFIRM 1
 #define PICKER_EVENT_CANCEL 2
@@ -33,6 +38,7 @@ typedef struct Picker {
     int top;
     int hover;
     int index[FGD_MAX_CLASSES]; /* entity picker: fgd class indices */
+    int target;                 /* PICK_TARGET_*: main.c routes the result */
 } Picker;
 
 void picker_init(Picker *picker);

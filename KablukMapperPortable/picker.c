@@ -30,6 +30,7 @@ void picker_init(Picker *picker)
 {
     picker->open = 0;
     picker->kind = PICK_ENTITY;
+    picker->target = PICK_TARGET_BLOCK;
     picker->count = 0;
     picker->cur = 0;
     picker->top = 0;

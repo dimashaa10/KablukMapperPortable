@@ -137,18 +137,32 @@ static long file_size(const char *path)
 /* ------------------------------------------------------------------ */
 /* Stage running                                                       */
 /* ------------------------------------------------------------------ */
-static int run_qbsp(const char *map_path)
+/* qbsp looks for the worldspawn "wad" key relative to the directory of the
+ * .map file, which is not where the editor keeps it: the wad was picked
+ * relative to the editor, so tell qbsp that directory. Without this every
+ * texture is reported missing and the .bsp ends up without any miptex. */
+static int run_qbsp(const char *map_path, const char *wad_path)
 {
-    char *argv[3];
+    char wad_dir[PATH_LEN];
+    char *argv[5];
+    int argc = 0;
     int rc;
 
-    argv[0] = (char *)"qbsp";
-    argv[1] = (char *)map_path;
-    argv[2] = NULL;
+    argv[argc++] = (char *)"qbsp";
+    fs_copy(wad_dir, PATH_LEN, wad_path != NULL ? wad_path : "");
+    if (wad_dir[0] != '\0') {
+        fs_parent(wad_dir, PATH_LEN);
+        if (wad_dir[0] != '\0') {
+            argv[argc++] = (char *)"-wadpath";
+            argv[argc++] = wad_dir;
+        }
+    }
+    argv[argc++] = (char *)map_path;
+    argv[argc] = NULL;
 
     if (setjmp(chain_jmp) == 0) {
         chain_armed = 1;
-        rc = tyr_qbsp_main(2, argv);
+        rc = tyr_qbsp_main(argc, argv);
         chain_armed = 0;
     } else {
         rc = 1;
@@ -261,7 +275,7 @@ int bspchain_run_stage(BspChain *chain)
     chain->stage = stage;
 
     if (chain->stage == BSPCHAIN_QBSP) {
-        rc = run_qbsp(chain->map_path);
+        rc = run_qbsp(chain->map_path, chain->wad_path);
     } else if (chain->stage == BSPCHAIN_LIGHT) {
         rc = run_light(chain->bsp_path);
     } else if (chain->stage == BSPCHAIN_VIS) {

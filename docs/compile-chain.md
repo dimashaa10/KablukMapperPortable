@@ -50,6 +50,27 @@ they are linked straight into the editor and entered through
 `vendor/tyrutils/README.kabluk.md` for the small patch set that makes that
 possible.
 
+## The map is sealed by the exporter, not by the editor
+
+The editor starts with an empty map: nothing is pre-placed around the border
+any more, so the whole 32 x 32 grid is yours to paint. What keeps the level
+from leaking is the exporter:
+
+* the floor slab (`z -16..0`) and the ceiling slab (`z 128..144`) cover the
+  whole map;
+* every border cell the user left **empty** becomes part of a wall run
+  (`z -16..144`, one brush per run, four runs for an untouched map), so a map
+  with a single room in the middle still seals;
+* border cells the user painted are left exactly as they are, with the texture
+  that was used.
+
+The log says how many runs were added:
+
+```
+SEALING WALLS: 4 RUNS AROUND THE BORDER
+FLOOR + CEILING SLABS ADDED
+```
+
 ## Numbers on a desktop (max size grid map, 4096 x 4096 units, 145 brushes)
 
 The map is 32 x 32 cells of 128 units, so world coordinates run from **-2048**
@@ -62,7 +83,8 @@ to **+2048** on both axes; the `.map` the editor writes has exactly that extent
 | light | 4.6 MB (with its lightmap lump) | 0.05 s |
 | vis | 5.4 MB | 0.02 s |
 | whole chain inside the editor | 22 MB | ~0.2 s |
-| the `.bsp` it writes | 432 KB, of which 313 KB lightmaps | — |
+| the `.bsp` it writes | 443 458 B, of which 313 257 B lightmaps | — |
+| the same map with no blocks at all | 426 924 B (slabs + walls only) | — |
 
 The lightmap lump is still the big one: ~2000 faces, ~200 lumels each. `light`
 sizes that buffer from the faces instead of reserving a fixed maximum (see
@@ -76,6 +98,14 @@ their pools, upstream assumes one run per process): about 2 MB per extra
 compile of a map this size. For the PSP the remaining work is: free the tools'
 pools between runs more aggressively, and run the chain in a worker thread so
 the editor keeps drawing while vis runs.
+
+## Textures actually reach the `.bsp`
+
+`qbsp` resolves the worldspawn `wad` key relative to the directory of the
+`.map`, but the editor keeps the wad where the user picked it. The chain
+therefore calls `qbsp -wadpath <folder of the wad>`, which is what puts the
+miptexes into the level — before that every texture came back as
+`Texture ... not found` and the `.bsp` had none.
 
 ## A note on lighting
 

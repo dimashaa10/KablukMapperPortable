@@ -5,11 +5,14 @@
  *
  * Geometry: every solid cell is a 128x128x128 block standing on z = 0.
  * Neighbouring cells that share a texture are merged into one brush per row,
- * which keeps the .map (and later the BSP) a lot smaller. The whole map also
- * gets a floor slab below z = 0 and a ceiling slab above z = 128, so nothing
- * can leak into the void.
+ * which keeps the .map (and later the BSP) a lot smaller. Besides the blocks
+ * the exporter always writes a floor slab below z = 0, a ceiling slab above
+ * z = 128 and a wall around every border cell the user left empty, so nothing
+ * can leak into the void no matter how little was painted.
  */
 #include "compile.h"
+
+#include "fs.h"
 
 /* The chain reports its lines through a single callback (see bspchain.h). */
 static CompileJob *log_target = NULL;
@@ -122,6 +125,8 @@ void compile_init(CompileJob *job)
     job->map_path[0] = '\0';
     job->brush_total = 0;
     job->brush_done = 0;
+    job->wall_total = 0;
+    job->save_only = 0;
     job->entity_total = 0;
     job->entity_done = 0;
     job->cur_row = 0;
@@ -336,6 +341,16 @@ static const char *wad_fallback_texture(const Wad *wad)
     return "brown";
 }
 
+/* Floor / ceiling / sealing wall texture: the one picked in the editor
+ * settings, or the first texture of the wad when nothing was picked. */
+static const char *slab_texture(const Wad *wad, const char *picked)
+{
+    if (picked != NULL && picked[0] != '\0') {
+        return picked;
+    }
+    return wad_fallback_texture(wad);
+}
+
 static const char *brush_texture(const Grid *grid, const Wad *wad, int cx,
                                  int cy)
 {
@@ -348,10 +363,116 @@ static const char *brush_texture(const Grid *grid, const Wad *wad, int cx,
 }
 
 /* ------------------------------------------------------------------ */
+/* Sealing walls                                                       */
+/* ------------------------------------------------------------------ */
+/* The editor no longer pre-fills the border, so the exporter walls it off:
+ * every *empty* border cell becomes part of a wall run, cells the user
+ * painted are left exactly as they are. Four runs per edge at most, so the
+ * brush count barely moves. */
+#define BORDER_RUNS_MAX (MAP_ROWS * 2 + 2)
+
+typedef struct BorderRun {
+    int horizontal; /* 1 = runs along x on row y, 0 = along y on column x */
+    int line;       /* the row / column the run sits on */
+    int from;
+    int to;         /* inclusive cell range */
+} BorderRun;
+
+static int border_runs(const Grid *grid, BorderRun *runs, int max)
+{
+    int n = 0;
+    int i;
+
+    /* top and bottom rows, along x */
+    for (i = 0; i < 2; i++) {
+        int y = (i == 0) ? 0 : MAP_ROWS - 1;
+        int x = 0;
+
+        while (x < MAP_COLS) {
+            int start;
+
+            while (x < MAP_COLS && grid->solid[y][x] != CELL_EMPTY) {
+                x++;
+            }
+            if (x >= MAP_COLS) {
+                break;
+            }
+            start = x;
+            while (x < MAP_COLS && grid->solid[y][x] == CELL_EMPTY) {
+                x++;
+            }
+            if (n < max) {
+                runs[n].horizontal = 1;
+                runs[n].line = y;
+                runs[n].from = start;
+                runs[n].to = x - 1;
+                n++;
+            }
+        }
+    }
+
+    /* left and right columns, along y, corners already covered above */
+    for (i = 0; i < 2; i++) {
+        int x = (i == 0) ? 0 : MAP_COLS - 1;
+        int y = 1;
+
+        while (y < MAP_ROWS - 1) {
+            int start;
+
+            while (y < MAP_ROWS - 1 && grid->solid[y][x] != CELL_EMPTY) {
+                y++;
+            }
+            if (y >= MAP_ROWS - 1) {
+                break;
+            }
+            start = y;
+            while (y < MAP_ROWS - 1 && grid->solid[y][x] == CELL_EMPTY) {
+                y++;
+            }
+            if (n < max) {
+                runs[n].horizontal = 0;
+                runs[n].line = x;
+                runs[n].from = start;
+                runs[n].to = y - 1;
+                n++;
+            }
+        }
+    }
+    return n;
+}
+
+static void write_border_walls(CompileJob *job, const Grid *grid, const Wad *wad,
+                               const Settings *settings)
+{
+    BorderRun runs[BORDER_RUNS_MAX];
+    const char *texture;
+    int count;
+    int i;
+
+    texture = slab_texture(wad, settings != NULL ? settings->floor_tex : NULL);
+    count = border_runs(grid, runs, BORDER_RUNS_MAX);
+    for (i = 0; i < count; i++) {
+        const BorderRun *r = &runs[i];
+        int minz = -SLAB_THICKNESS;
+        int maxz = BLOCK_HEIGHT_UNITS + SLAB_THICKNESS;
+
+        if (r->horizontal) {
+            write_box(job, cell_world_x(r->from), cell_world_y(r->line),
+                      minz, cell_world_x(r->to + 1),
+                      cell_world_y(r->line + 1), maxz, texture);
+        } else {
+            write_box(job, cell_world_x(r->line), cell_world_y(r->from), minz,
+                      cell_world_x(r->line + 1), cell_world_y(r->to + 1), maxz,
+                      texture);
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* Job                                                                 */
 /* ------------------------------------------------------------------ */
 void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                   const Settings *settings, const Wad *wad)
+                   const Settings *settings, const Wad *wad, int save_only)
 {
     char buf[COMPILE_LOG_LEN];
     int len;
@@ -359,24 +480,23 @@ void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
     compile_init(job);
     job->state = COMPILE_RUNNING;
     job->step = 0;
+    job->save_only = save_only;
 
     strncpy(job->out_dir, settings->out_dir[0] != '\0' ? settings->out_dir : ".",
             PATH_LEN - 1);
     job->out_dir[PATH_LEN - 1] = '\0';
 
-    /* build the target path */
-    len = 0;
-    len = cat_str_cap(job->map_path, PATH_LEN, 0, job->out_dir);
-    if (len > 0 && job->map_path[len - 1] != '/' && job->map_path[len - 1] != '\\') {
-        job->map_path[len++] = '/';
-        job->map_path[len] = '\0';
-    }
-    cat_str_cap(job->map_path, PATH_LEN, len, MAP_NAME ".map");
+    /* "<out dir>/<name>.map", the name comes from the editor settings; the
+     * folder is created when it is missing, so a new map name never fails on
+     * a missing directory */
+    fs_mkdir(job->out_dir);
+    settings_map_path(settings, job->map_path, PATH_LEN);
 
     log_target = job;
     job->chain_started = 0;
     job->light_entities = 0;
-    compile_log_add(job, "KABLUK MAPPER - MAP COMPILER");
+    compile_log_add(job, save_only ? "KABLUK MAPPER - SAVE MAP SOURCE"
+                                   : "KABLUK MAPPER - MAP COMPILER");
     len = 0;
     len = cat_str(buf, len, "OUTPUT: ");
     cat_str(buf, len, job->map_path);
@@ -404,7 +524,6 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
 {
     char buf[COMPILE_LOG_LEN];
     int len;
-    int i;
 
     if (job->state != COMPILE_RUNNING) {
         return;
@@ -415,7 +534,13 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         int solid = count_solid(grid);
         int ents = count_entities(grid);
 
-        job->brush_total = count_runs(grid) + 2; /* + floor and ceiling slabs */
+        {   /* + floor and ceiling slabs + the walls that seal the border */
+            BorderRun runs[BORDER_RUNS_MAX];
+            int walls = border_runs(grid, runs, BORDER_RUNS_MAX);
+
+            job->wall_total = walls;
+            job->brush_total = count_runs(grid) + 2 + walls;
+        }
         job->entity_total = ents;
         job->progress = 5;
 
@@ -435,22 +560,12 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         break;
     }
 
-    case 1: /* seal check */
-        for (i = 0; i < MAP_COLS; i++) {
-            if (grid->solid[0][i] == CELL_EMPTY ||
-                grid->solid[MAP_ROWS - 1][i] == CELL_EMPTY) {
-                compile_fail(job, "LEAK: MAP SHELL IS OPEN");
-                return;
-            }
-        }
-        for (i = 0; i < MAP_ROWS; i++) {
-            if (grid->solid[i][0] == CELL_EMPTY ||
-                grid->solid[i][MAP_COLS - 1] == CELL_EMPTY) {
-                compile_fail(job, "LEAK: MAP SHELL IS OPEN");
-                return;
-            }
-        }
-        compile_log_add(job, "SEAL CHECK: SHELL CLOSED (NO LEAKS)");
+    case 1: /* the border is walled off by the exporter, never by the editor */
+        len = 0;
+        len = cat_str(buf, len, "SEALING WALLS: ");
+        len = cat_int(buf, len, job->wall_total);
+        cat_str(buf, len, " RUNS AROUND THE BORDER");
+        compile_log_add(job, buf);
         compile_log_add(job, "FLOOR + CEILING SLABS ADDED");
         job->progress = 10;
         job->step++;
@@ -551,15 +666,20 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
             compile_log_add(job, buf);
         }
 
-        /* floor and ceiling slabs covering the whole map (-2048..2048) */
+        /* floor and ceiling slabs covering the whole map (-2048..2048), each
+         * with the texture picked for it in the editor settings */
         write_box(job, -MAP_HALF_UNITS, -MAP_HALF_UNITS, -SLAB_THICKNESS,
                   MAP_HALF_UNITS, MAP_HALF_UNITS, 0,
-                  wad_fallback_texture(wad));
+                  slab_texture(wad, settings != NULL ? settings->floor_tex : NULL));
         write_box(job, -MAP_HALF_UNITS, -MAP_HALF_UNITS, BLOCK_HEIGHT_UNITS,
                   MAP_HALF_UNITS, MAP_HALF_UNITS,
                   BLOCK_HEIGHT_UNITS + SLAB_THICKNESS,
-                  wad_fallback_texture(wad));
-        job->brush_done = 2;
+                  slab_texture(wad, settings != NULL ? settings->ceiling_tex
+                                                      : NULL));
+        /* and the walls that keep the map sealed now that nothing is
+         * pre-placed in the border */
+        write_border_walls(job, grid, wad, settings);
+        job->brush_done = 2 + job->wall_total;
         job->cur_row = 0;
         job->cur_col = 0;
         job->progress = 20;
@@ -696,6 +816,14 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         len = cat_int(buf, len, (int)job->bytes);
         cat_str(buf, len, " BYTES");
         compile_log_add(job, buf);
+
+        if (job->save_only) {
+            compile_log_add(job, "MAP SOURCE SAVED - NOT COMPILED");
+            job->progress = 100;
+            job->state = COMPILE_DONE;
+            job->step++;
+            break;
+        }
 
         bspchain_setup(&job->chain, job->map_path,
                        settings != NULL ? settings->wad_path : "");

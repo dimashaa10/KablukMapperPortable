@@ -62,11 +62,10 @@
 #define MAP_WORLD_UNITS (MAP_COLS * BLOCK_UNITS)
 #define MAP_HALF_UNITS (MAP_WORLD_UNITS / 2)
 
-/* The map is always sealed while editing: every border cell of the map is
- * meant to be solid (floor, ceiling and walls), so the player can never
- * fall through the map and the compiler can never report a leak. */
-#define MAP_DEFAULT_FLOOR 1
-#define MAP_DEFAULT_CEILING 1
+/* The map is sealed by the exporter, not by the editor: the floor and the
+ * ceiling are always written as slabs, and border cells the user left empty
+ * get a wall around them, so a map can never leak into the void no matter
+ * what was (not) painted. */
 
 /* ------------------------------------------------------------------ */
 /* Timing                                                              */
@@ -79,6 +78,7 @@
 #define PATH_LEN 260
 #define FS_MAX_ENTRIES 96
 #define DEFAULT_OUT_DIR "maps"
+#define DEFAULT_MAP_NAME "kabluk"
 
 /* Entity definitions. The .fgd is loaded from next to the executable
  * (a copy is put there by the build), then from the repo folders. */
