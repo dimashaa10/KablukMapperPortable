@@ -23,9 +23,11 @@
 #define WINDOW_TITLE "Kabluk Mapper Portable"
 
 /* ------------------------------------------------------------------ */
-/* Left tool panel                                                     */
+/* Panels (both can be folded away: L = left, R = right)               */
 /* ------------------------------------------------------------------ */
-#define PANEL_W 80
+#define PANEL_W 80       /* left tool panel  */
+#define RIGHT_PANEL_W 144 /* right property panel */
+
 #define PANEL_BUTTONS 4
 #define PANEL_BTN_MARGIN 6
 #define PANEL_BTN_W (PANEL_W - PANEL_BTN_MARGIN * 2) /* 68 */
@@ -36,27 +38,40 @@
                   (PANEL_BUTTONS - 1) * PANEL_BTN_GAP)) / 2)
 
 /* ------------------------------------------------------------------ */
-/* Grid area (everything right of the panel)                           */
+/* Grid area (whatever is left between the panels)                     */
 /* ------------------------------------------------------------------ */
-#define GRID_X PANEL_W
-#define GRID_Y 0
-#define GRID_W (SCREEN_W - GRID_X) /* 400 */
-#define GRID_H SCREEN_H            /* 272 */
-
 #define CELL_SIZE 16
-#define VIEW_COLS (GRID_W / CELL_SIZE) /* 25 visible columns */
-#define VIEW_ROWS (GRID_H / CELL_SIZE) /* 17 visible rows    */
+#define MAX_VIEW_COLS (SCREEN_W / CELL_SIZE) /* 30 */
+#define MAX_VIEW_ROWS (SCREEN_H / CELL_SIZE) /* 17 */
 
 #define GRID_MAJOR_EVERY 8 /* every 8th line is brighter (64 units) */
 
-/* Map model, in cells (Quake-ish 64 units per major line). */
+/* Map model, in cells. One cell = one brush = 128x128x128 units. */
 #define MAP_COLS 64
 #define MAP_ROWS 64
+
+/* One editor block. Quake units; a player is 56x56x32 tall, so 128 units
+ * is comfortably above it and a sealed crate can be built from it. */
+#define BLOCK_UNITS 128
+#define BLOCK_HEIGHT_UNITS BLOCK_UNITS
+
+/* The map is always sealed while editing: every border cell of the map is
+ * meant to be solid (floor, ceiling and walls), so the player can never
+ * fall through the map and the compiler can never report a leak. */
+#define MAP_DEFAULT_FLOOR 1
+#define MAP_DEFAULT_CEILING 1
 
 /* ------------------------------------------------------------------ */
 /* Timing                                                              */
 /* ------------------------------------------------------------------ */
 #define FRAME_MS 16 /* ~60 fps cap, PSP screen refresh is 60 Hz */
+
+/* ------------------------------------------------------------------ */
+/* File paths (future: ms0:/PSP/GAME/KABLUK on the PSP)                */
+/* ------------------------------------------------------------------ */
+#define PATH_LEN 260
+#define FS_MAX_ENTRIES 96
+#define DEFAULT_OUT_DIR "maps"
 
 /* ------------------------------------------------------------------ */
 /* Palette (0xRRGGBB) - Quake-ish browns and amber                     */
@@ -80,5 +95,11 @@
 #define COL_TEXT 0xD9C69C
 #define COL_TEXT_DIM 0x8C7452
 #define COL_ACCENT 0xE8A33C
+
+#define COL_FIELD 0x100C08
+#define COL_SEPARATOR 0x3B2F21
+#define COL_ROW_SEL 0x4A3312
+#define COL_OK 0x8FBF5A
+#define COL_WARN 0xC96A3C
 
 #endif /* KMP_CONFIG_H */

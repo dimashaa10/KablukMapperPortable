@@ -45,4 +45,12 @@ int gfx_text_width(const char *text, int scale);
 int gfx_text(Gfx *g, int x, int y, const char *text, unsigned int rgb, int scale);
 int gfx_text_int(Gfx *g, int x, int y, int value, unsigned int rgb, int scale);
 
+/* Right aligned text: 'x_right' is the right edge. */
+void gfx_text_right(Gfx *g, int x_right, int y, const char *text, unsigned int rgb,
+                    int scale);
+
+/* Text cut to max_w pixels, ending with ".." when it does not fit. */
+int gfx_text_clip(Gfx *g, int x, int y, int max_w, const char *text,
+                  unsigned int rgb, int scale);
+
 #endif /* KMP_GFX_H */

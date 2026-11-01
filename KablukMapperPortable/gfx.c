@@ -188,6 +188,51 @@ int gfx_text(Gfx *g, int x, int y, const char *text, unsigned int rgb, int scale
     return px;
 }
 
+void gfx_text_right(Gfx *g, int x_right, int y, const char *text, unsigned int rgb,
+                    int scale)
+{
+    gfx_text(g, x_right - gfx_text_width(text, scale), y, text, rgb, scale);
+}
+
+int gfx_text_clip(Gfx *g, int x, int y, int max_w, const char *text,
+                  unsigned int rgb, int scale)
+{
+    char buf[64];
+    int limit;
+    int len = 0;
+    int i;
+
+    if (text == NULL || scale < 1 || max_w <= 0) {
+        return x;
+    }
+    limit = max_w / ((FONT_W + 1) * scale);
+    if (limit < 1) {
+        return x;
+    }
+    if (limit > (int)sizeof(buf) - 1) {
+        limit = (int)sizeof(buf) - 1;
+    }
+    while (text[len] != '\0' && len < limit) {
+        len++;
+    }
+    if (text[len] == '\0') {
+        return gfx_text(g, x, y, text, rgb, scale);
+    }
+    /* truncate: keep limit-2 glyphs and append ".." */
+    if (len > 2) {
+        len -= 2;
+    } else {
+        len = 0;
+    }
+    for (i = 0; i < len; i++) {
+        buf[i] = text[i];
+    }
+    buf[len++] = '.';
+    buf[len++] = '.';
+    buf[len] = '\0';
+    return gfx_text(g, x, y, buf, rgb, scale);
+}
+
 int gfx_text_int(Gfx *g, int x, int y, int value, unsigned int rgb, int scale)
 {
     char buf[12];

@@ -144,6 +144,11 @@
     <ClCompile Include="grid.c" />
     <ClCompile Include="ui.c" />
     <ClCompile Include="font.c" />
+    <ClCompile Include="layout.c" />
+    <ClCompile Include="props.c" />
+    <ClCompile Include="settings.c" />
+    <ClCompile Include="fs.c" />
+    <ClCompile Include="menu.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h" />
@@ -151,6 +156,12 @@
     <ClInclude Include="grid.h" />
     <ClInclude Include="ui.h" />
     <ClInclude Include="font.h" />
+    <ClInclude Include="layout.h" />
+    <ClInclude Include="props.h" />
+    <ClInclude Include="settings.h" />
+    <ClInclude Include="fs.h" />
+    <ClInclude Include="menu.h" />
+    <ClInclude Include="keys.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
