@@ -57,8 +57,15 @@ Mechanical only; no algorithm was touched.
 7. **`qbsp/tyr_qbsp_prefix.h` (new)** — qbsp ships private copies of cmdlib,
    mathlib, file and bspfile. Linked into one binary they collide with
    `common/*` and with `light/entities.c`, so the 19 clashing symbols get a
-   `q_` prefix. `qbsp.h` includes this header first; all qbsp translation units
-   include `qbsp.h`, so the rename is consistent.
+   `q_` prefix. `qbsp.h` includes this header first and every qbsp translation
+   unit includes `qbsp.h`, so the rename is consistent — with one exception
+   that GCC 14 and younger refuse to compile: `qbsp/bspfile.c` includes
+   `file.h` *before* `qbsp.h`, so `LoadFile` was still the plain name when the
+   prototype was read, and the call two lines later expanded to `q_LoadFile`,
+   which nothing declared. `file.h` and `bspfile.h` now include the prefix
+   header themselves, so their prototypes carry the prefix whatever order they
+   are included in. (Older GCC only warned, and the desktop harness hides it
+   with `-w`; `-Werror=implicit-function-declaration` proves the fix.)
 8. **Re-runnable tools** — the editor may compile the same map (or another
    one) several times per session, while upstream assumes one run per process:
    * `qbsp/qbsp.c` zeroes `map` and `options` at entry and calls `FreeAllMem()`

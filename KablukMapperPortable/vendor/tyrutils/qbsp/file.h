@@ -22,6 +22,10 @@
 #ifndef FILE_H
 #define FILE_H
 
+/* Kabluk Mapper: the q_ rename has to be in place before the prototype below,
+ * because qbsp/bspfile.c includes this header before qbsp.h. */
+#include "tyr_qbsp_prefix.h"
+
 #include <stdbool.h>
 
 size_t LoadFile(const char *filename, void *bufptr, bool nofail);

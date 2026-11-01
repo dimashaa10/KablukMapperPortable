@@ -21,6 +21,10 @@
 #ifndef __BSPFILE_H__
 #define __BSPFILE_H__
 
+/* Kabluk Mapper: same reason as file.h - the prototypes below carry the q_
+ * prefix no matter what this header is included from. */
+#include "tyr_qbsp_prefix.h"
+
 #include <stdint.h>
 
 /* FIXME - put this typedef elsewhere */
