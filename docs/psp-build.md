@@ -137,9 +137,10 @@ XMB, and `ESC` / circle leaves the editor back to the start screen.
   64 x 64, which the converter handles in a small static buffer.
 * **Screen.** 480 x 272 is the real resolution, not a scaled window, so the
   layout (80 px palette, 160 px properties, 15 x 17 grid) is used as designed.
-* **Memory.** The editor's own 21 objects are ~60 KB of code. The bulk of the
-  RAM goes to tyrutils while a map compiles; a map of the size shipped here
-  compiles to ~443 KB of `.bsp`.
+* **Memory.** The editor's own 21 objects are ~60 KB of code. The heap is the
+  rest of the console's 32 MB (pspsdk's start code takes all of it), and the
+  bulk of it goes to tyrutils while a map compiles; a map of the size shipped
+  here compiles to ~443 KB of `.bsp`.
 * **Draw calls.** Everything on screen is a filled rectangle or a line - the
   text is glyph pixels merged into vertical runs. The editor's own screen is
   about 1 000 of them per frame, the row heavy file browser about 3 800,
@@ -158,6 +159,7 @@ XMB, and `ESC` / circle leaves the editor back to the start screen.
 | `SDL.h: No such file or directory` | SDL2 is not in the pspdev prefix: `psp-pacman -S sdl2` |
 | `EBOOT.PBP` builds, screen stays black | the firmware is older than 6.00 (`PSP_FW_VERSION` in the Makefile), or the folder is not `ms0:/PSP/GAME/KABLUK` |
 | starts, then "WAD MISSING" in the editor | pick the wad in the settings, or put it next to `EBOOT.PBP` |
+| the compile stops with an allocation error on a big map | the heap is what is left of the PSP's 32 MB after the screen, the textures and the wad; compile with a smaller wad loaded |
 
 ## State of this port
 
