@@ -104,6 +104,17 @@ Mechanical only; no algorithm was touched.
     purpose: on x64 the single threaded branch is used, and `light`/`vis` are
     called with `-threads 1` either way.
 
+14. **Left as upstream wrote it — `AddLump()` padding** (`common/bspfile.c`).
+    The lump writer does `SafeWrite(data, (size + 3) & ~3)` and then, when
+    `size % 4`, writes `size % 4` more zero bytes. Two consequences: the first
+    call reads up to 3 bytes past the end of the lump buffer, and the offsets
+    of the following lumps are not 4-byte aligned. Neither harms anything -
+    every tool and engine finds a lump through `fileofs`/`filelen` - and the
+    bytes on disk are exactly what this port has always produced, so the code
+    is untouched and documented instead. An AddressSanitizer build reports a
+    heap-buffer-overflow in `SafeWrite` as soon as it compiles a map; that
+    report is this, not a bug in the editor.
+
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
 basenames that exist twice — `bspfile.c`, `cmdlib.c`, `mathlib.c`, once in

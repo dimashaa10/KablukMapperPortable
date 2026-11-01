@@ -62,3 +62,8 @@ KablukMapperPortable/*.user
 
 # Tool logs written next to the executable
 *.log
+
+# PSP build output (make / make dist)
+dist/
+*.pbp
+*.sfo

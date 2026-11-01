@@ -137,3 +137,17 @@ is yours to edit (`docs/properties.md`). 200 is the usual "bright but still
 shaded" Quake minlight. Add your own `light` entities from the FGD
 when you want pools of real light on top of that floor — the exporter counts
 them (`LIGHT ENTITIES: n`) but never invents one.
+
+## One quirk worth knowing
+
+An AddressSanitizer build of the editor stops the moment a map is compiled:
+`SafeWrite` in `common/cmdlib.c` reads up to three bytes past the end of the
+last lump. That is upstream's lump padding (`AddLump()` writes
+`(size + 3) & ~3` bytes and then a few zero bytes on top), not a bug the port
+introduced - lumps are found through `fileofs`/`filelen`, so the file is read
+correctly by every tool and engine, and the same bytes have been produced
+since the compile chain went in. It is documented in
+`vendor/tyrutils/README.kabluk.md` (change 14) instead of being changed, so a
+regression run under ASAN should stay away from the modes that end in a
+compile (`compile_*`, `slabtex`, `namedcompile`) and use the rest, which are
+clean.

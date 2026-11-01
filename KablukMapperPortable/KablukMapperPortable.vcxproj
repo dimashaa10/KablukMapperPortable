@@ -141,6 +141,7 @@
   <ItemGroup>
     <ClCompile Include="main.c" />
     <ClCompile Include="gfx.c" />
+    <ClCompile Include="input.c" />
     <ClCompile Include="grid.c" />
     <ClCompile Include="ui.c" />
     <ClCompile Include="font.c" />
@@ -211,6 +212,7 @@
   <ItemGroup>
     <ClInclude Include="config.h" />
     <ClInclude Include="gfx.h" />
+    <ClInclude Include="input.h" />
     <ClInclude Include="grid.h" />
     <ClInclude Include="ui.h" />
     <ClInclude Include="font.h" />

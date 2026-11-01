@@ -22,6 +22,10 @@
 
 #define WINDOW_TITLE "Kabluk Mapper Portable"
 
+/* Where the EBOOT and its files live on the memory stick. The PSP build
+ * chdir()s here when the loader does not tell it the EBOOT's own folder. */
+#define DEFAULT_PSP_DIR "ms0:/PSP/GAME/KABLUK"
+
 /* the two corner credits of the start screen */
 #define APP_AUTHOR "DIMTENCORP"
 #define APP_VERSION "VERSION 0.1"
@@ -77,7 +81,7 @@
 #define FRAME_MS 16 /* ~60 fps cap, PSP screen refresh is 60 Hz */
 
 /* ------------------------------------------------------------------ */
-/* File paths (future: ms0:/PSP/GAME/KABLUK on the PSP)                */
+/* File paths                                                            */
 /* ------------------------------------------------------------------ */
 #define PATH_LEN 260
 #define FS_MAX_ENTRIES 96

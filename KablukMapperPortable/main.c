@@ -47,6 +47,7 @@
 #include "fgd.h"
 #include "gfx.h"
 #include "grid.h"
+#include "input.h"
 #include "keyboard.h"
 #include "keys.h"
 #include "layout.h"
@@ -76,6 +77,7 @@ typedef struct App {
     Keyboard kbd;
     CompileJob job;
     CompileUi compile_ui;
+    Input input; /* the pad, turned into keys and mouse moves */
 
     int running;
     int tool;
@@ -183,6 +185,36 @@ static void app_reload_wad(void)
     }
     picker_close(&app.picker);
 }
+
+#ifdef KMP_HAVE_PSP
+#include <unistd.h>
+
+/* The PSP starts homebrew somewhere else than its own folder, and every path
+ * in the editor (Quake.fgd, the .wad, maps/) is relative: move to the folder
+ * EBOOT.PBP lives in, which the loader passes as argv[0]. */
+static void app_chdir_to_eboot(const char *arg0)
+{
+    char dir[PATH_LEN];
+    int i;
+    int cut = -1;
+
+    if (arg0 != NULL) {
+        fs_copy(dir, PATH_LEN, arg0);
+        for (i = 0; dir[i] != '\0'; i++) {
+            if (dir[i] == '/' || dir[i] == '\\') {
+                cut = i;
+            }
+        }
+        if (cut > 0) {
+            dir[cut] = '\0';
+            if (chdir(dir) == 0) {
+                return;
+            }
+        }
+    }
+    chdir(DEFAULT_PSP_DIR); /* the folder the readme tells people to use */
+}
+#endif
 
 /* Leave the editor: XMB on the PSP, the desktop just closes. */
 static void app_quit(void)
@@ -785,8 +817,12 @@ int main(int argc, char *argv[])
     unsigned int frame_start;
     unsigned int frame_time;
 
+#ifdef KMP_HAVE_PSP
+    app_chdir_to_eboot(argc > 0 ? argv[0] : NULL);
+#else
     (void)argc;
     (void)argv;
+#endif
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_Log("SDL init failed: %s", SDL_GetError());
@@ -809,6 +845,7 @@ int main(int argc, char *argv[])
     }
 
     app.window = window;
+    input_init(&app.input);
     grid_init(&app.grid);
     settings_defaults(&app.settings);
     menu_init(&app.menu, &app.settings, &app.job);
@@ -857,6 +894,20 @@ int main(int argc, char *argv[])
             app_handle_event(&event);
         }
 
+        /* The PSP pad (and any gamepad on the desktop) is polled: the events
+         * it produces walk through the very same handler as real input. */
+        {
+            SDL_Event pad_events[INPUT_EVENT_MAX];
+            int pad_count = input_pump(&app.input, pad_events,
+                                       (int)(sizeof(pad_events) /
+                                             sizeof(pad_events[0])));
+            int pad_index;
+
+            for (pad_index = 0; pad_index < pad_count; pad_index++) {
+                app_handle_event(&pad_events[pad_index]);
+            }
+        }
+
         app_render();
 
         /* ~60 fps cap: SDL_Delay keeps the CPU idle (and the PSP happy) */
@@ -866,6 +917,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    input_shutdown(&app.input);
     textures_reset(&app.textures);
     gfx_shutdown(&app.gfx);
     SDL_DestroyWindow(window);

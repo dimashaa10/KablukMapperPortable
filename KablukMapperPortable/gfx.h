@@ -14,6 +14,7 @@ typedef struct Gfx {
     SDL_Renderer *renderer;
     int width;
     int height;
+    unsigned int tex_format; /* SDL_PIXELFORMAT_* the renderer accepts */
 } Gfx;
 
 /* Returns 1 on success, 0 on failure. */

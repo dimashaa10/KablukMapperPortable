@@ -8,11 +8,98 @@
 #include "config.h"
 #include "font.h"
 
+/* The biggest texture the editor builds is a 64x64 block preview. */
+#define GFX_CONVERT_MAX 64
+
+/* Textures are built from ARGB8888 pixels, but a renderer only takes the
+ * formats it advertises - the PSP one works in ABGR and does not list
+ * ARGB8888 at all, and SDL refuses a format the renderer does not know. So
+ * the format is negotiated once, and the pixels are converted on upload. */
+static unsigned int gfx_convert32[GFX_CONVERT_MAX * GFX_CONVERT_MAX];
+static unsigned short gfx_convert16[GFX_CONVERT_MAX * GFX_CONVERT_MAX];
+
+static unsigned int gfx_choose_format(SDL_Renderer *renderer)
+{
+    static const Uint32 wanted[] = {
+        SDL_PIXELFORMAT_ARGB8888, SDL_PIXELFORMAT_ABGR8888,
+        SDL_PIXELFORMAT_ABGR4444, SDL_PIXELFORMAT_ABGR1555,
+        SDL_PIXELFORMAT_ARGB4444
+    };
+    SDL_RendererInfo info;
+    int i;
+    int f;
+
+    if (SDL_GetRendererInfo(renderer, &info) != 0) {
+        return SDL_PIXELFORMAT_ARGB8888;
+    }
+    for (i = 0; i < (int)(sizeof(wanted) / sizeof(wanted[0])); i++) {
+        for (f = 0; f < (int)info.num_texture_formats; f++) {
+            if (info.texture_formats[f] == wanted[i]) {
+                return wanted[i];
+            }
+        }
+    }
+    return SDL_PIXELFORMAT_ARGB8888;
+}
+
+/* ARGB8888 (0xAARRGGBB) -> the renderer's format. Returns the pitch, or 0
+ * when the texture is bigger than the scratch buffers. */
+static int gfx_convert_pixels(const Gfx *g, const unsigned int *pixels, int w,
+                              int h, const void **out)
+{
+    int count;
+    int i;
+
+    if (g->tex_format == SDL_PIXELFORMAT_ARGB8888) {
+        *out = pixels;
+        return w * 4;
+    }
+    if (w > GFX_CONVERT_MAX || h > GFX_CONVERT_MAX) {
+        *out = NULL;
+        return 0;
+    }
+    count = w * h;
+
+    if (g->tex_format == SDL_PIXELFORMAT_ABGR8888) {
+        for (i = 0; i < count; i++) {
+            unsigned int c = pixels[i];
+
+            gfx_convert32[i] = (c & 0xFF00FF00u) | ((c & 0x00FF0000u) >> 16) |
+                               ((c & 0x000000FFu) << 16);
+        }
+        *out = gfx_convert32;
+        return w * 4;
+    }
+
+    /* 16 bit: R, G and B lose the low bits, and alpha is on or off in 1555 */
+    for (i = 0; i < count; i++) {
+        unsigned int c = pixels[i];
+        unsigned int a = (c >> 24) & 0xFFu;
+        unsigned int r = (c >> 16) & 0xFFu;
+        unsigned int green = (c >> 8) & 0xFFu;
+        unsigned int b = c & 0xFFu;
+
+        if (g->tex_format == SDL_PIXELFORMAT_ABGR1555) {
+            gfx_convert16[i] = (unsigned short)((a >= 0x80 ? 0x8000u : 0u) |
+                                                ((b >> 3) << 10) |
+                                                ((green >> 3) << 5) | (r >> 3));
+        } else {
+            gfx_convert16[i] = (unsigned short)(((a >> 4) << 12) |
+                                                ((b >> 4) << 8) |
+                                                ((green >> 4) << 4) |
+                                                (r >> 4));
+        }
+    }
+    *out = gfx_convert16;
+    return w * 2;
+}
+
 int gfx_init(Gfx *g, SDL_Window *window)
 {
     g->renderer = NULL;
     g->width = SCREEN_W;
     g->height = SCREEN_H;
+    g->tex_format = SDL_PIXELFORMAT_ARGB8888;
 
     /* Accelerated + vsync if we can, otherwise whatever is available
      * (the PSP SDL port may only offer the software renderer). */
@@ -32,6 +119,8 @@ int gfx_init(Gfx *g, SDL_Window *window)
     /* Draw in 480x272 no matter what the window actually is. */
     SDL_RenderSetLogicalSize(g->renderer, SCREEN_W, SCREEN_H);
     SDL_SetRenderDrawBlendMode(g->renderer, SDL_BLENDMODE_BLEND);
+    g->tex_format = gfx_choose_format(g->renderer);
+    SDL_Log("renderer textures: format 0x%08X", (unsigned int)g->tex_format);
     return 1;
 }
 
@@ -130,16 +219,23 @@ void gfx_rect_alpha(Gfx *g, int x, int y, int w, int h, unsigned int rgb,
 SDL_Texture *gfx_texture_from_argb(Gfx *g, const unsigned int *pixels, int w, int h)
 {
     SDL_Texture *texture;
+    const void *data = NULL;
+    int pitch;
 
     if (pixels == NULL || w <= 0 || h <= 0) {
         return NULL;
     }
-    texture = SDL_CreateTexture(g->renderer, SDL_PIXELFORMAT_ARGB8888,
+    pitch = gfx_convert_pixels(g, pixels, w, h, &data);
+    if (pitch == 0 || data == NULL) {
+        SDL_Log("texture %dx%d does not fit the converter", w, h);
+        return NULL;
+    }
+    texture = SDL_CreateTexture(g->renderer, g->tex_format,
                                 SDL_TEXTUREACCESS_STATIC, w, h);
     if (texture == NULL) {
         return NULL;
     }
-    if (SDL_UpdateTexture(texture, NULL, pixels, w * 4) != 0) {
+    if (SDL_UpdateTexture(texture, NULL, data, pitch) != 0) {
         SDL_DestroyTexture(texture);
         return NULL;
     }
