@@ -621,9 +621,10 @@ static void app_render(void)
     if (app.right_open) {
         props_draw(&app.gfx, &app.grid, &app.fgd, &app.props, &app.values);
     }
-    picker_draw(&app.gfx, &app.picker, &app.fgd, &app.textures, &app.wad);
     compileui_draw(&app.gfx, &app.compile_ui, &app.job, &app.settings);
     menu_draw(&app.gfx, &app.menu);
+    /* the texture / entity list can sit on top of the settings window */
+    picker_draw(&app.gfx, &app.picker, &app.fgd, &app.textures, &app.wad);
     keyboard_draw(&app.gfx, &app.kbd);
 
     gfx_frame_end(&app.gfx);
