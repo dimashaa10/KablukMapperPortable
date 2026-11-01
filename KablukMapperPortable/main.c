@@ -11,6 +11,9 @@
  *     the ceiling and the walls that seal the map (compile.c), so the grid
  *     starts empty and nothing can leak into the void
  *
+ * The program opens on the start screen (menu.c, MENU_MAIN): CREATE MAP goes
+ * to an empty grid, LOAD MAP reads a .map back through mapfile.c, QUIT leaves.
+ *
  * Tools (left panel):
  *   SELECT   - click a point entity to show its properties on the right
  *   BLOCK    - place a block with the current texture, right click erases
@@ -24,10 +27,19 @@
  *   Q / E             fold the left / right panel (PSP: L / R)
  *   ENTER             editor settings (PSP: SELECT)
  *   F2                compile map window (PSP: START)
- *   ESC               quit
+ *   ESC               back to the start screen (QUIT is there)
  */
 #include <SDL.h>
 #include <stdio.h>
+#include <string.h>
+
+/* "Quit" has to leave the game on the PSP so the XMB comes back; on the
+ * desktop the main loop just stops. The module is only pulled in when a PSP
+ * toolchain does the build, so nothing changes for the other targets. */
+#if defined(__PSP__) || defined(_PSP) || defined(PSP)
+#include <pspkernel.h>
+#define KMP_HAVE_PSP 1
+#endif
 
 #include "compile.h"
 #include "compileui.h"
@@ -38,6 +50,7 @@
 #include "keyboard.h"
 #include "keys.h"
 #include "layout.h"
+#include "mapfile.h"
 #include "menu.h"
 #include "picker.h"
 #include "props.h"
@@ -171,6 +184,130 @@ static void app_reload_wad(void)
     picker_close(&app.picker);
 }
 
+/* Leave the editor: XMB on the PSP, the desktop just closes. */
+static void app_quit(void)
+{
+#ifdef KMP_HAVE_PSP
+    sceKernelExitGame();
+#endif
+    app.running = 0;
+}
+
+static int app_file_exists(const char *path)
+{
+    FILE *file;
+
+    if (path == NULL || path[0] == '\0') {
+        return 0;
+    }
+    file = fopen(path, "rb");
+    if (file == NULL) {
+        return 0;
+    }
+    fclose(file);
+    return 1;
+}
+
+/* "maps/myroom.map" -> "myroom" */
+static void app_map_name_from_path(const char *path, char *out, int cap)
+{
+    const char *base = fs_basename(path);
+    int n = 0;
+
+    while (base[n] != '\0' && base[n] != '.' && n < cap - 1) {
+        out[n] = base[n];
+        n++;
+    }
+    out[n] = '\0';
+}
+
+/* The .map remembers its wad. Try it as written (that is how the editor saved
+ * it), then next to the map, then one folder above the map: the compiled maps
+ * live in their own folder but the wad usually does not. */
+static void app_resolve_wad_path(const char *map_path, const char *wad, char *out,
+                                 int cap)
+{
+    char dir[PATH_LEN];
+    char candidate[PATH_LEN];
+
+    fs_copy(out, cap, wad);
+    if (wad[0] == '\0' || app_file_exists(wad)) {
+        return;
+    }
+    fs_copy(dir, PATH_LEN, map_path);
+    fs_parent(dir, PATH_LEN);
+    fs_join(candidate, PATH_LEN, dir, wad);
+    if (app_file_exists(candidate)) {
+        fs_copy(out, cap, candidate);
+        return;
+    }
+    fs_parent(dir, PATH_LEN);
+    fs_join(candidate, PATH_LEN, dir, wad);
+    if (app_file_exists(candidate)) {
+        fs_copy(out, cap, candidate);
+    }
+}
+
+/* Start screen: an empty project. */
+static void app_new_map(void)
+{
+    if (compile_is_running(&app.job)) {
+        menu_set_status(&app.menu, "WAIT FOR THE COMPILE TO FINISH");
+        return;
+    }
+    grid_init(&app.grid);
+    values_init(&app.values);
+    props_view_init(&app.props);
+    app_seed_defaults();
+    app.panel_focus = 0;
+    app.tool = TOOL_SELECT;
+    menu_close(&app.menu);
+}
+
+/* Start screen: a .map from disk. */
+static void app_load_map(const char *path)
+{
+    static MapFile info;
+    char wad[PATH_LEN];
+    char line[MENU_STATUS_LEN];
+
+    if (compile_is_running(&app.job)) {
+        menu_set_status(&app.menu, "WAIT FOR THE COMPILE TO FINISH");
+        return;
+    }
+    grid_init(&app.grid);
+    values_init(&app.values);
+    props_view_init(&app.props);
+    app.panel_focus = 0;
+
+    if (mapfile_peek_wad(path, wad, PATH_LEN)) {
+        char resolved[PATH_LEN];
+
+        app_resolve_wad_path(path, wad, resolved, PATH_LEN);
+        if (resolved[0] != '\0' && strcmp(resolved, app.settings.wad_path) != 0) {
+            fs_copy(app.settings.wad_path, PATH_LEN, resolved);
+            app_reload_wad();
+        }
+    }
+
+    if (!mapfile_load(path, &app.grid, &app.fgd, &app.values, &app.wad, &info)) {
+        sprintf(line, "LOAD FAILED: %.32s",
+                info.error[0] != '\0' ? info.error : "UNKNOWN");
+        menu_set_status(&app.menu, line);
+        app_seed_defaults(); /* the half read project is thrown away */
+        return;
+    }
+
+    /* keep saving / compiling next to the file that was loaded */
+    app_map_name_from_path(path, app.settings.map_name, FS_NAME_LEN);
+    fs_copy(app.settings.out_dir, PATH_LEN, path);
+    fs_parent(app.settings.out_dir, PATH_LEN);
+
+    menu_close(&app.menu);
+    SDL_Log("map loaded: %d brushes, %d cells, %d entities, %d textures missing",
+            info.brushes, info.cells, info.entities, info.tex_missing);
+}
+
 /* index of a texture name in the loaded wad, -1 when it is not there */
 static int app_tex_index(const char *name)
 {
@@ -233,6 +370,15 @@ static void app_handle_menu_request(void)
         }
         compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
                       1);
+        break;
+    case MENU_REQUEST_NEW_MAP:
+        app_new_map();
+        break;
+    case MENU_REQUEST_LOAD_MAP:
+        app_load_map(app.menu.picked);
+        break;
+    case MENU_REQUEST_QUIT:
+        app_quit();
         break;
     default:
         break;
@@ -392,7 +538,7 @@ static void app_handle_key(const SDL_KeyboardEvent *key)
 
     switch (key->keysym.sym) {
     case KEY_QUIT:
-        app.running = 0;
+        menu_open_main(&app.menu); /* Quit lives on the start screen */
         break;
 
     case KEY_OPEN_SETTINGS:
@@ -673,6 +819,7 @@ int main(int argc, char *argv[])
     app_seed_defaults();
     compile_init(&app.job);
     compileui_init(&app.compile_ui);
+    menu_open_main(&app.menu); /* the editor starts from the start screen */
 
     app.running = 1;
     app.tool = TOOL_SELECT;

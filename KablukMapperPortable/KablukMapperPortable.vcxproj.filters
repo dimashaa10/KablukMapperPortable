@@ -59,6 +59,9 @@
     <ClCompile Include="menu.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="mapfile.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
     <ClCompile Include="fgd.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -218,6 +221,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="menu.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="mapfile.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="keys.h">

@@ -43,6 +43,22 @@
 #define SET_STATUS_Y (SET_HINT_Y + 24)
 
 /* ------------------------------------------------------------------ */
+/* Start screen geometry                                               */
+/* ------------------------------------------------------------------ */
+#define MM_TITLE_Y 44
+#define MM_SUB_Y (MM_TITLE_Y + 22)
+#define MM_BTN_W 236
+#define MM_BTN_H 26
+#define MM_BTN_GAP 10
+#define MM_BTN_X ((SCREEN_W - MM_BTN_W) / 2)
+#define MM_BTN0_Y 108
+#define MM_HINT_Y 234
+#define MM_PANEL_X 40
+#define MM_PANEL_Y 18
+#define MM_PANEL_W (SCREEN_W - 2 * MM_PANEL_X)
+#define MM_PANEL_H 238
+
+/* ------------------------------------------------------------------ */
 /* File browser geometry                                               */
 /* ------------------------------------------------------------------ */
 #define BR_X 6
@@ -136,6 +152,14 @@ int menu_is_open(const Menu *menu)
     return menu->mode != MENU_CLOSED;
 }
 
+void menu_open_main(Menu *menu)
+{
+    menu->mode = MENU_MAIN;
+    menu->sel = MAIN_ROW_CREATE;
+    menu->hover = -1;
+    menu->request = MENU_REQUEST_NONE;
+}
+
 void menu_open_settings(Menu *menu)
 {
     menu->mode = MENU_SETTINGS;
@@ -158,6 +182,17 @@ void menu_close(Menu *menu)
 /* ------------------------------------------------------------------ */
 /* Browser                                                             */
 /* ------------------------------------------------------------------ */
+static const char *browse_ext(int target)
+{
+    if (target == BROWSE_WAD) {
+        return ".wad";
+    }
+    if (target == BROWSE_MAP) {
+        return ".map";
+    }
+    return NULL;
+}
+
 static void browse_refresh(Menu *menu)
 {
     int n = 0;
@@ -171,8 +206,7 @@ static void browse_refresh(Menu *menu)
     fs_copy(menu->entries[n].name, FS_NAME_LEN, "..");
     n++;
 
-    n += fs_list_dir(menu->path,
-                     menu->browse_target == BROWSE_WAD ? ".wad" : NULL,
+    n += fs_list_dir(menu->path, browse_ext(menu->browse_target),
                      menu->entries + n, FS_MAX_ENTRIES - n);
 
     menu->count = n;
@@ -191,6 +225,12 @@ static void browse_open(Menu *menu, int target)
         if (menu->settings->wad_path[0] != '\0') {
             fs_copy(menu->path, PATH_LEN, menu->settings->wad_path);
             fs_parent(menu->path, PATH_LEN);
+        } else {
+            fs_copy(menu->path, PATH_LEN, ".");
+        }
+    } else if (target == BROWSE_MAP) {
+        if (menu->settings->out_dir[0] != '\0') {
+            fs_copy(menu->path, PATH_LEN, menu->settings->out_dir);
         } else {
             fs_copy(menu->path, PATH_LEN, ".");
         }
@@ -249,6 +289,11 @@ static void browse_activate(Menu *menu, int index)
         browse_refresh(menu);
         break;
     default: /* file */
+        if (menu->browse_target == BROWSE_MAP) {
+            fs_join(menu->picked, PATH_LEN, menu->path, entry->name);
+            menu->request = MENU_REQUEST_LOAD_MAP;
+            break; /* main.c loads it and closes the menu, or says why not */
+        }
         fs_join(menu->settings->wad_path, PATH_LEN, menu->path, entry->name);
         menu->mode = menu->return_mode;
         break;
@@ -302,6 +347,50 @@ static int settings_hit(int mx, int my)
     return -1;
 }
 
+/* ------------------------------------------------------------------ */
+/* Start screen                                                        */
+/* ------------------------------------------------------------------ */
+static const char *main_label(int row)
+{
+    switch (row) {
+    case MAIN_ROW_CREATE:
+        return "CREATE MAP";
+    case MAIN_ROW_LOAD:
+        return "LOAD MAP";
+    default:
+        return "QUIT";
+    }
+}
+
+static void main_activate(Menu *menu, int row)
+{
+    switch (row) {
+    case MAIN_ROW_CREATE:
+        menu->request = MENU_REQUEST_NEW_MAP;
+        break;
+    case MAIN_ROW_LOAD:
+        menu_open_browse(menu, BROWSE_MAP, MENU_MAIN);
+        break;
+    default:
+        menu->request = MENU_REQUEST_QUIT;
+        break;
+    }
+}
+
+static int main_hit(int mx, int my)
+{
+    int i;
+
+    for (i = 0; i < MAIN_ROW_COUNT; i++) {
+        int y = MM_BTN0_Y + i * (MM_BTN_H + MM_BTN_GAP);
+
+        if (menu_in_rect(mx, my, MM_BTN_X, y, MM_BTN_W, MM_BTN_H)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 /* what a settings row does when it is confirmed */
 static void settings_activate(Menu *menu, int row)
 {
@@ -347,6 +436,11 @@ static void menu_status(Menu *menu, const char *prefix, const char *text)
     }
     line[n] = '\0';
     fs_copy(menu->status, MENU_STATUS_LEN, line);
+}
+
+void menu_set_status(Menu *menu, const char *text)
+{
+    fs_copy(menu->status, MENU_STATUS_LEN, text != NULL ? text : "");
 }
 
 void menu_set_map_name(Menu *menu, const char *name)
@@ -403,6 +497,9 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
     case SDL_KEYDOWN:
         switch (event->key.keysym.sym) {
         case KEY_OPEN_SETTINGS:
+            if (menu->mode == MENU_MAIN) {
+                return 1;
+            }
             if (menu->mode == MENU_BROWSE) {
                 menu->mode = menu->return_mode;
             } else {
@@ -412,6 +509,8 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
         case KEY_UP:
             if (menu->mode == MENU_SETTINGS) {
                 menu->sel = (menu->sel + MENU_ROW_COUNT - 1) % MENU_ROW_COUNT;
+            } else if (menu->mode == MENU_MAIN) {
+                menu->sel = (menu->sel + MAIN_ROW_COUNT - 1) % MAIN_ROW_COUNT;
             } else {
                 browse_move(menu, -1);
             }
@@ -419,6 +518,8 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
         case KEY_DOWN:
             if (menu->mode == MENU_SETTINGS) {
                 menu->sel = (menu->sel + 1) % MENU_ROW_COUNT;
+            } else if (menu->mode == MENU_MAIN) {
+                menu->sel = (menu->sel + 1) % MAIN_ROW_COUNT;
             } else {
                 browse_move(menu, 1);
             }
@@ -426,6 +527,8 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
         case KEY_CONFIRM:
             if (menu->mode == MENU_SETTINGS) {
                 settings_activate(menu, menu->sel);
+            } else if (menu->mode == MENU_MAIN) {
+                main_activate(menu, menu->sel);
             } else {
                 browse_activate(menu, menu->cur);
             }
@@ -437,6 +540,9 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
             }
             return 1;
         case KEY_CANCEL:
+            if (menu->mode == MENU_MAIN) {
+                return 1; /* the menu is the way out, Z does nothing here */
+            }
             if (menu->mode == MENU_BROWSE) {
                 menu->mode = menu->return_mode;
             } else {
@@ -448,7 +554,9 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
         }
 
     case SDL_MOUSEMOTION:
-        if (menu->mode == MENU_SETTINGS) {
+        if (menu->mode == MENU_MAIN) {
+            menu->hover = main_hit(event->motion.x, event->motion.y);
+        } else if (menu->mode == MENU_SETTINGS) {
             menu->hover = settings_hit(event->motion.x, event->motion.y);
         } else {
             menu->hover = browse_hit(menu, event->motion.x, event->motion.y);
@@ -459,7 +567,13 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
         if (event->button.button != SDL_BUTTON_LEFT) {
             return 1;
         }
-        if (menu->mode == MENU_SETTINGS) {
+        if (menu->mode == MENU_MAIN) {
+            hit = main_hit(event->button.x, event->button.y);
+            if (hit >= 0) {
+                menu->sel = hit;
+                main_activate(menu, hit);
+            }
+        } else if (menu->mode == MENU_SETTINGS) {
             hit = settings_hit(event->button.x, event->button.y);
             if (hit >= 0) {
                 menu->sel = hit;
@@ -601,6 +715,41 @@ static void draw_settings(Gfx *g, const Menu *menu)
     draw_status(g, menu, SET_FIELD_X, SET_STATUS_Y, SET_FIELD_W);
 }
 
+static void draw_main(Gfx *g, const Menu *menu)
+{
+    static const char *title = "KABLUK MAPPER PORTABLE";
+    static const char *subtitle = "QUAKE MAP EDITOR";
+    int w;
+    int i;
+
+    /* the start screen owns the whole picture: solid backdrop + panel frame */
+    gfx_rect(g, 0, 0, SCREEN_W, SCREEN_H, COL_BG);
+    gfx_rect(g, MM_PANEL_X, MM_PANEL_Y, MM_PANEL_W, MM_PANEL_H, COL_PANEL);
+    gfx_outline(g, MM_PANEL_X, MM_PANEL_Y, MM_PANEL_W, MM_PANEL_H,
+                COL_PANEL_EDGE);
+
+    w = gfx_text_width(title, 2);
+    gfx_text(g, (SCREEN_W - w) / 2, MM_TITLE_Y, title, COL_ACCENT, 2);
+    w = gfx_text_width(subtitle, 1);
+    gfx_text(g, (SCREEN_W - w) / 2, MM_SUB_Y, subtitle, COL_TEXT_DIM, 1);
+
+    gfx_rect(g, (SCREEN_W - 160) / 2, MM_SUB_Y + 14, 160, 1, COL_SEPARATOR);
+
+    for (i = 0; i < MAIN_ROW_COUNT; i++) {
+        int y = MM_BTN0_Y + i * (MM_BTN_H + MM_BTN_GAP);
+        /* the mouse wins while it is over a button, otherwise the keyboard
+         * highlight is the one that shows */
+        int active = menu->hover >= 0 ? (i == menu->hover) : (i == menu->sel);
+
+        draw_button(g, MM_BTN_X, y, MM_BTN_W, MM_BTN_H, main_label(i), active);
+    }
+
+    draw_status(g, menu, MM_PANEL_X + 14, MM_HINT_Y - 18, MM_PANEL_W - 28);
+    w = gfx_text_width("[UP/DOWN] MOVE   [X] SELECT", 1);
+    gfx_text(g, (SCREEN_W - w) / 2, MM_HINT_Y, "[UP/DOWN] MOVE   [X] SELECT",
+             COL_TEXT_DIM, 1);
+}
+
 static void draw_entry_label(char *out, int cap, const FsEntry *entry)
 {
     int i = 0;
@@ -636,8 +785,10 @@ static void draw_browse(Gfx *g, const Menu *menu)
     gfx_outline(g, BR_X, BR_Y, BR_W, BR_H, COL_ACCENT);
 
     gfx_text(g, BR_X + 10, BR_Y + 8,
-             menu->browse_target == BROWSE_WAD ? "SELECT WAD FILE"
-                                               : "SELECT OUTPUT FOLDER",
+             menu->browse_target == BROWSE_WAD
+                 ? "SELECT WAD FILE"
+                 : (menu->browse_target == BROWSE_MAP ? "LOAD MAP FILE"
+                                                      : "SELECT OUTPUT FOLDER"),
              COL_ACCENT, 1);
 
     /* "NEW FOLDER" button, top right */
@@ -714,7 +865,9 @@ void menu_draw(Gfx *g, const Menu *menu)
     /* dim everything behind the modal */
     gfx_rect_alpha(g, 0, 0, SCREEN_W, SCREEN_H, 0x000000, 170);
 
-    if (menu->mode == MENU_SETTINGS) {
+    if (menu->mode == MENU_MAIN) {
+        draw_main(g, menu);
+    } else if (menu->mode == MENU_SETTINGS) {
         draw_settings(g, menu);
     } else {
         draw_browse(g, menu);

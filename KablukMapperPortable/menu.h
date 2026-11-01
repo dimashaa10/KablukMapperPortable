@@ -2,11 +2,12 @@
  * Kabluk Mapper Portable - menu.h
  *
  * Modal screens:
+ *   MENU_MAIN     - the start screen: "Create map", "Load map", "Quit"
  *   MENU_SETTINGS - editor settings opened with SELECT: path to the .wad, the
  *                   folder compiled maps are written to, the name of the map
  *                   source and the floor / ceiling textures
- *   MENU_BROWSE   - small file browser used to pick either of them; it can
- *                   also create folders
+ *   MENU_BROWSE   - small file browser used to pick a .wad, a folder or a
+ *                   .map; it can also create folders
  *
  * The menu never opens a keyboard or a list itself: it raises a MENU_REQUEST_*
  * and main.c does it (it owns the one keyboard and the one picker).
@@ -23,6 +24,13 @@
 #define MENU_CLOSED 0
 #define MENU_SETTINGS 1
 #define MENU_BROWSE 2
+#define MENU_MAIN 3
+
+/* rows of the start screen */
+#define MAIN_ROW_CREATE 0
+#define MAIN_ROW_LOAD 1
+#define MAIN_ROW_QUIT 2
+#define MAIN_ROW_COUNT 3
 
 #define MENU_ROW_WAD 0
 #define MENU_ROW_OUT 1
@@ -40,9 +48,13 @@
 #define MENU_REQUEST_FLOOR 3   /* pick the floor texture */
 #define MENU_REQUEST_CEILING 4 /* pick the ceiling texture */
 #define MENU_REQUEST_SAVE 5    /* write the .map source now */
+#define MENU_REQUEST_NEW_MAP 6 /* start an empty map */
+#define MENU_REQUEST_LOAD_MAP 7/* load menu.picked */
+#define MENU_REQUEST_QUIT 8    /* leave the editor */
 
 #define BROWSE_WAD 0
 #define BROWSE_DIR 1
+#define BROWSE_MAP 2
 
 #define BROWSE_VISIBLE 13
 
@@ -69,16 +81,21 @@ typedef struct Menu {
 
     int request;             /* MENU_REQUEST_*, cleared by main.c */
     char status[MENU_STATUS_LEN]; /* last save / new folder result */
+    char picked[PATH_LEN];   /* the .map chosen in a BROWSE_MAP browser */
 } Menu;
 
 void menu_init(Menu *menu, Settings *settings, const struct CompileJob *job);
 int menu_is_open(const Menu *menu);
+void menu_open_main(Menu *menu);
 void menu_open_settings(Menu *menu);
 
 /* Opens the file browser on its own (used by the compile window to pick the
  * output folder); after picking or cancelling it returns to 'return_mode'. */
 void menu_open_browse(Menu *menu, int target, int return_mode);
 void menu_close(Menu *menu);
+
+/* One line of feedback, shown in the menu it belongs to. */
+void menu_set_status(Menu *menu, const char *text);
 
 /* Results of what main.c did for a MENU_REQUEST_* */
 void menu_set_map_name(Menu *menu, const char *name);

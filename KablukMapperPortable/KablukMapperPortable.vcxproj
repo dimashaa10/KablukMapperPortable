@@ -149,6 +149,7 @@
     <ClCompile Include="settings.c" />
     <ClCompile Include="fs.c" />
     <ClCompile Include="menu.c" />
+    <ClCompile Include="mapfile.c" />
     <ClCompile Include="fgd.c" />
     <ClCompile Include="wad.c" />
     <ClCompile Include="textures.c" />
@@ -218,6 +219,7 @@
     <ClInclude Include="settings.h" />
     <ClInclude Include="fs.h" />
     <ClInclude Include="menu.h" />
+    <ClInclude Include="mapfile.h" />
     <ClInclude Include="keys.h" />
     <ClInclude Include="fgd.h" />
     <ClInclude Include="wad.h" />
