@@ -6,8 +6,21 @@
 /* biggest mip the editor ever wants: enough for a 64x64 level */
 #define MIP_MAX 64
 
+/* The PSP renderer only accepts power-of-two textures, so the console gets a
+ * resampled one when a texture is 24x24 or 40x64: without this SDL refuses it
+ * and the cell stays empty. The desktop renderers take any size, so there the
+ * pixels go up untouched. */
+#if defined(KMP_HAVE_PSP) || defined(__PSP__)
+#define TEXTURES_POT 1
+#else
+#define TEXTURES_POT 0
+#endif
+
 static unsigned char mip_pixels[MIP_MAX * MIP_MAX];
 static unsigned int argb[MIP_MAX * MIP_MAX];
+#if TEXTURES_POT
+static unsigned int argb_pot[MIP_MAX * MIP_MAX];
+#endif
 
 void textures_reset(Textures *textures)
 {
@@ -49,20 +62,66 @@ static int textures_read(const Wad *wad, int index, int level, int *out_w, int *
     return w * h;
 }
 
+#if TEXTURES_POT
+static int textures_pot_size(int value)
+{
+    int size = 8;
+
+    while (size < value && size < MIP_MAX) {
+        size *= 2;
+    }
+    return size;
+}
+
+/* Nearest neighbour to the next power of two, both ways up and down. */
+static void textures_resample(int w, int h, int pot_w, int pot_h)
+{
+    int x;
+    int y;
+
+    for (y = 0; y < pot_h; y++) {
+        int sy = y * h / pot_h;
+
+        for (x = 0; x < pot_w; x++) {
+            int sx = x * w / pot_w;
+
+            argb_pot[y * pot_w + x] = argb[sy * w + sx];
+        }
+    }
+}
+
+#endif /* TEXTURES_POT */
+
 static SDL_Texture *textures_build(Gfx *g, const Wad *wad, int index, int level,
                                    int *out_w, int *out_h)
 {
+    int w = 0;
+    int h = 0;
     int count;
     int i;
 
-    count = textures_read(wad, index, level, out_w, out_h);
+    count = textures_read(wad, index, level, &w, &h);
     if (count == 0) {
         return NULL;
     }
     for (i = 0; i < count; i++) {
         argb[i] = wad_palette_rgb(wad, mip_pixels[i]);
     }
-    return gfx_texture_from_argb(g, argb, *out_w, *out_h);
+    *out_w = w;
+    *out_h = h;
+
+#if TEXTURES_POT
+    if (w != textures_pot_size(w) || h != textures_pot_size(h)) {
+        int pot_w = textures_pot_size(w);
+        int pot_h = textures_pot_size(h);
+
+        textures_resample(w, h, pot_w, pot_h);
+        *out_w = pot_w;
+        *out_h = pot_h;
+        return gfx_texture_from_argb(g, argb_pot, pot_w, pot_h);
+    }
+#endif
+    return gfx_texture_from_argb(g, argb, w, h);
 }
 
 SDL_Texture *textures_get(Gfx *g, Textures *textures, const Wad *wad, int index)

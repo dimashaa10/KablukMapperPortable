@@ -152,12 +152,16 @@ void gfx_rect_alpha(Gfx *g, int x, int y, int w, int h, unsigned int rgb,
     (void)rgb;
     (void)alpha;
 }
+/* the upload is recorded: its size is what the PSP has to accept */
+static int upload_w;
+static int upload_h;
+
 SDL_Texture *gfx_texture_from_argb(Gfx *g, const unsigned int *pixels, int w, int h)
 {
     (void)g;
     (void)pixels;
-    (void)w;
-    (void)h;
+    upload_w = w;
+    upload_h = h;
     return NULL;
 }
 void gfx_texture_destroy(SDL_Texture *texture)
@@ -395,6 +399,43 @@ static void test_wad(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* thumbnails: which size ends up in the texture                       */
+/* ------------------------------------------------------------------ */
+static void test_thumbnail_size(void)
+{
+    Wad wad;
+    Textures textures;
+
+    printf("\n== picker thumbnails\n");
+    memset(&textures, 0, sizeof(textures));
+    upload_w = 0;
+    upload_h = 0;
+    if (wad_load(&wad, "picker_test.wad") != TEX_COUNT) {
+        check(0, "the wad loads for the thumbnail test");
+        return;
+    }
+    /* T24 is 24x24: the mip that fits a 40 px cell is the full 24x24 one */
+    textures_thumb(NULL, &textures, &wad, 2, 40);
+
+#if defined(KMP_HAVE_PSP) || defined(__PSP__)
+    check(upload_w == 32 && upload_h == 32,
+          "a 24x24 thumbnail goes up as 32x32 (PSP needs powers of two)");
+#else
+    check(upload_w == 24 && upload_h == 24,
+          "a 24x24 thumbnail keeps its size on the desktop");
+#endif
+    /* 64x64 texture, 40 px cell: level 1 is 32x32, already a power of two */
+    textures_thumb(NULL, &textures, &wad, 0, 40);
+    check(upload_w == 32 && upload_h == 32, "a 64x64 texture previews at 32x32");
+
+    /* 32x64 keeps its shape: level 1 is 16x32 */
+    textures_thumb(NULL, &textures, &wad, 3, 40);
+    check(upload_w == 16 && upload_h == 32, "a 32x64 texture previews at 16x32");
+
+    wad_close(&wad);
+}
+
+/* ------------------------------------------------------------------ */
 /* the picker grid                                                     */
 /* ------------------------------------------------------------------ */
 static Wad fake_wad;
@@ -600,6 +641,7 @@ int main(void)
     }
 
     test_wad();
+    test_thumbnail_size();
     test_picker();
 
     printf("\n%s (%d failures)\n", failures == 0 ? "PASS" : "FAIL", failures);

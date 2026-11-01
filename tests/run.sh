@@ -50,4 +50,11 @@ $cc $flags $inc -o "$work/bin/picker" \
 KMP_TEST_CWD="$work/stick" "$work/bin/picker"
 
 echo
+echo "== the same test, built as the PSP (power-of-two previews)"
+$cc $flags $inc -D__PSP__ -DSDL_MAIN_HANDLED -o "$work/bin/picker_psp" \
+    "$root/tests/test_picker.c" "$src/picker.c" "$src/textures.c" "$src/wad.c" \
+    "$src/fgd.c"
+KMP_TEST_CWD="$work/stick" "$work/bin/picker_psp"
+
+echo
 echo "all host tests passed"

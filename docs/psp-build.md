@@ -206,6 +206,14 @@ runs from `ms0:/PSP/GAME/KABLUK` and its own paths are relative to that.
   released before a compile starts so `qbsp` / `light` / `vis` get that memory
   instead. `tex wad` in the settings picks the wad; the palette comes from
   `palette.lmp` next to it.
+* **Power-of-two previews.** A wad texture does not have to be 32 x 32 or
+  64 x 64 - plenty are 24 x 24 or 40 x 64 - and the PSP renderer only takes
+  powers of two, so on the console the pixels are resampled (nearest
+  neighbour, still in `textures.c`) to the next size up before the upload.
+  Without that SDL refuses the texture and the cell stays empty; the desktop
+  renderers take any size, so there nothing is touched. `tests/test_picker.c`
+  is built both ways and checks that a 24 x 24 texture goes up as 32 x 32 with
+  `-D__PSP__` and as 24 x 24 without.
 * **Screen.** 480 x 272 is the real resolution, not a scaled window, so the
   layout (80 px palette, 160 px properties, 15 x 17 grid) is used as designed.
 * **Memory.** The editor's own 21 objects are ~60 KB of code. The heap is the
