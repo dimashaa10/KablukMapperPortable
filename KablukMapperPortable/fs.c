@@ -3,6 +3,8 @@
  *
  * Directory listing + tiny path helpers for the file browser.
  */
+#define _CRT_SECURE_NO_WARNINGS
+
 #include "fs.h"
 
 #include <string.h>
