@@ -11,7 +11,7 @@ Memory Stick.
 ## What you need
 
 * `pspdev-win-15.2.0-v2.zip` extracted to **`C:\pspdev`**, so that
-  `C:\pspdev\bin\psp-gcc.exe` and `C:\pspdev\msys2.exe` are there.
+  `C:\pspdev\bin\psp-gcc.exe` is there.
 * SDL2 inside that pspdev (it is bundled). Two files have to exist:
 
 ```sh
@@ -19,9 +19,24 @@ ls /c/pspdev/psp/include/SDL2/SDL.h
 ls /c/pspdev/psp/lib/libSDL2.a
 ```
 
-If they do not, install it from the pspdev shell: `psp-pacman -S sdl2`. When
-`make` complains instead - "SDL.h: No such file or directory" - ask it what it
-found:
+If they do not, install it: the same release publishes the libraries on their
+own, as an overlay for exactly this case -
+
+```powershell
+Invoke-WebRequest `
+  -Uri https://github.com/dmang-dev/pspdev-win/releases/download/v2/pspdev-win-libraries-15.2.0-v2.zip `
+  -OutFile $env:TEMP\psp-libs.zip
+Expand-Archive $env:TEMP\psp-libs.zip -DestinationPath C:\pspdev -Force
+```
+
+- and after it `C:\pspdev\psp\include\SDL2\SDL.h` and
+`C:\pspdev\psp\lib\libSDL2.a` exist. `psp-pacman -S sdl2` does the same
+thing, but the bundled `pacman.exe` is an MSYS2 binary built against one
+specific `msys-archive-13.dll`, and a newer MSYS2 on the same machine will not
+load it (see the troubleshooting table).
+
+If `make` complains instead - "SDL.h: No such file or directory" - ask it what
+it found:
 
 ```sh
 make sdk-info
@@ -181,6 +196,7 @@ XMB, and `ESC` / circle leaves the editor back to the start screen.
 | `psp-config: command not found` | `PATH` / `PSPDEV` is not set in this shell - see Build |
 | `/pspdev/psp/sdk/lib/build.mak: No such file or directory` | the Windows `psp-config` dropped the `C:` of `C:\pspdev`; say where it is: `make PSPDEV=/c/pspdev` (the Makefile also tries `/c/pspdev/psp/sdk` by itself) |
 | `SDL.h: No such file or directory` | SDL2 is not in the pspdev prefix: `psp-pacman -S sdl2`, then `make sdk-info` to see where it landed |
+| `psp-pacman`: `msys-archive-13.dll: cannot open shared object file` | the bundled pacman was built against an older MSYS2 `libarchive` than the one on your machine - skip it and extract `pspdev-win-libraries-15.2.0-v2.zip` over `C:\pspdev` instead |
 | `cannot find -lSDL2main` / `-lSDL2` | the headers are there but the static libraries are not; the same `psp-pacman -S sdl2` fixes it, `make sdk-info` lists the `.a` files it found |
 | `EBOOT.PBP` builds, screen stays black | the firmware is older than 6.00 (`PSP_FW_VERSION` in the Makefile), or the folder is not `ms0:/PSP/GAME/KABLUK` |
 | starts, then "WAD MISSING" in the editor | pick the wad in the settings, or put it next to `EBOOT.PBP` |
