@@ -57,4 +57,22 @@ $cc $flags $inc -D__PSP__ -DSDL_MAIN_HANDLED -o "$work/bin/picker_psp" \
 KMP_TEST_CWD="$work/stick" "$work/bin/picker_psp"
 
 echo
+echo "== type checked with pspdev's integer types"
+# pspdev's SDL spells Uint32 as "unsigned long", the desktop headers as
+# "unsigned int". They are different types even when both are 32 bits, and a
+# "&format" handed to SDL_QueryTexture compiles on the host and fails on the
+# console. Rebuild the headers with the console's spelling and type check
+# every source against them - -fsyntax-only, so this is fast.
+mkdir -p "$work/sdl_psp"
+for h in "$root"/SDL2/include/*.h; do
+    sed 's/^typedef uint32_t Uint32;/typedef unsigned long Uint32;/' "$h" |
+        grep -v '^SDL_COMPILE_TIME_ASSERT(' > "$work/sdl_psp/$(basename "$h")" || true
+done
+for f in "$src"/*.c; do
+    $cc -fsyntax-only $flags -I"$src" -I"$work/sdl_psp" -I"$root/tests/shim" \
+        -I"$src/vendor/tyrutils/include" "$f"
+done
+echo "every source type checks with Uint32 = unsigned long"
+
+echo
 echo "all host tests passed"

@@ -265,7 +265,11 @@ void gfx_blit(Gfx *g, SDL_Texture *texture, int x, int y, int w, int h)
 
 void gfx_blit_fit(Gfx *g, SDL_Texture *texture, int x, int y, int w, int h)
 {
-    unsigned int format = 0;
+    /* SDL spells its 32-bit integer Uint32, and on pspdev that is
+     * "unsigned long", not "unsigned int": SDL_QueryTexture wants a Uint32*,
+     * so the variable has to be one. (The desktop headers happen to make the
+     * two the same width, which is why this only broke the PSP build.) */
+    Uint32 format = 0;
     int tex_w = 0;
     int tex_h = 0;
     int draw_w;

@@ -206,6 +206,13 @@ runs from `ms0:/PSP/GAME/KABLUK` and its own paths are relative to that.
   released before a compile starts so `qbsp` / `light` / `vis` get that memory
   instead. `tex wad` in the settings picks the wad; the palette comes from
   `palette.lmp` next to it.
+* **`Uint32` is not `unsigned int` on pspdev.** SDL's 32-bit integer is
+  `unsigned long` there, so a `Uint32 *` out-parameter (`SDL_QueryTexture`)
+  has to be handed a `Uint32`, not an `unsigned int` - the desktop headers make
+  the two the same type, so the mistake only appears in the console build
+  (`passing argument 2 of 'SDL_QueryTexture' from incompatible pointer type`).
+  `sh tests/run.sh` ends with a type check of every source against a copy of
+  the SDL headers spelled the console's way, which catches it without psp-gcc.
 * **Power-of-two previews.** A wad texture does not have to be 32 x 32 or
   64 x 64 - plenty are 24 x 24 or 40 x 64 - and the PSP renderer only takes
   powers of two, so on the console the pixels are resampled (nearest
