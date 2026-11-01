@@ -28,6 +28,9 @@
 #define COMPILE_LOG_LINES 80
 #define COMPILE_LOG_LEN 80
 
+/* map-wide minimum light written into worldspawn ("light" key, minlight) */
+#define DEFAULT_MINLIGHT 200
+
 #define COMPILE_IDLE 0
 #define COMPILE_RUNNING 1
 #define COMPILE_DONE 2

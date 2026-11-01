@@ -16,9 +16,14 @@
 #if defined(_MSC_VER)
 #define TYR_PRINTF_ATTR(fmt, first)
 #define TYR_NORETURN_ATTR
+#define TYR_NOINLINE __declspec(noinline)
+/* no POSIX strcasecmp in the MSVC CRT */
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
 #else
 #define TYR_PRINTF_ATTR(fmt, first) __attribute__((format(printf, fmt, first)))
 #define TYR_NORETURN_ATTR __attribute__((noreturn))
+#define TYR_NOINLINE __attribute__((noinline))
 #endif
 
 #if defined(_WIN32)

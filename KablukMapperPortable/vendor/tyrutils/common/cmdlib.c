@@ -368,6 +368,7 @@ Q_strcasecmp(const char *s1, const char *s2)
     return Q_strncasecmp(s1, s2, 99999);
 }
 
+#if !defined(_MSC_VER)
 char *
 strupr(char *start)
 {
@@ -393,6 +394,7 @@ strlower(char *start)
     }
     return start;
 }
+#endif /* !_MSC_VER */
 
 
 /* ============================================================================

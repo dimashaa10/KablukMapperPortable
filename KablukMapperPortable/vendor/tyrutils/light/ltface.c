@@ -366,7 +366,7 @@ PrintFaceInfo(const bsp2_dface_t *face, const bsp2_t *bsp)
  * Fills in surf->texmins[], surf->texsize[] and sets surf->exactmid[]
  * ================
  */
-__attribute__((noinline))
+TYR_NOINLINE
 static void
 CalcFaceExtents(const bsp2_dface_t *face, const vec3_t offset,
 		const bsp2_t *bsp, lightsurf_t *surf)
@@ -449,7 +449,7 @@ WarnBadMidpoint(const vec3_t point)
  * to get the world xyz value of the sample point
  * =================
  */
-__attribute__((noinline))
+TYR_NOINLINE
 static void
 CalcPoints(const dmodel_t *model, const texorg_t *texorg, lightsurf_t *surf, int oversample)
 {
@@ -504,7 +504,25 @@ CalcPoints(const dmodel_t *model, const texorg_t *texorg, lightsurf_t *surf, int
     }
 }
 
-__attribute__((noinline))
+/*
+ * ================
+ * FaceLightmapSamples
+ * Lumels one light style of this face needs.  light sizes the lightdata lump
+ * with this instead of allocating a fixed maximum.
+ * ================
+ */
+int
+FaceLightmapSamples(const bsp2_dface_t *face, const vec3_t offset,
+                    const bsp2_t *bsp)
+{
+    lightsurf_t surf;
+
+    memset(&surf, 0, sizeof(surf));
+    CalcFaceExtents(face, offset, bsp, &surf);
+    return (surf.texsize[0] + 1) * (surf.texsize[1] + 1);
+}
+
+TYR_NOINLINE
 static void
 Lightsurf_Init(const modelinfo_t *modelinfo, const bsp2_dface_t *face,
 	       const bsp2_t *bsp, lightsurf_t *lightsurf, int oversample)
@@ -602,7 +620,7 @@ Lightmap_Save(lightmap_t *lightmaps, const lightsurf_t *lightsurf,
 /*
  * Average adjacent points on the grid to soften shadow edges
  */
-__attribute__((noinline))
+TYR_NOINLINE
 static void
 Lightmap_Soften(lightmap_t *lightmap, const lightsurf_t *lightsurf)
 {
@@ -964,9 +982,12 @@ WriteLightmaps(bsp2_dface_t *face, const lightsurf_t *lightsurf, const lightmap_
 		if (maxcolor > 255)
 		    VectorScale(color, 255.0f / maxcolor, color);
 
-		*lit++ = color[0];
-		*lit++ = color[1];
-		*lit++ = color[2];
+		/* coloured light only lives in the .lit file, which is opt in */
+		if (write_litfile) {
+		    *lit++ = color[0];
+		    *lit++ = color[1];
+		    *lit++ = color[2];
+		}
 
 		sample -= width * oversample - oversample;
 	    }

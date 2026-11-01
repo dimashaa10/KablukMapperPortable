@@ -29,7 +29,7 @@ over to `bspchain.c`, which calls one tool per frame:
 | 2 | floor and ceiling slabs | 15 % |
 | 3 | open the `.map`, write worldspawn and both slabs | 20 % |
 | 4 | merge solid cells into brushes, write them (64 per frame) | 20–80 % |
-| 5 | point entities, plus a default `light` if the map has none | 80 % |
+| 5 | point entities; worldspawn gets its `light` key (default 200) | 80 % |
 | 6 | close the file, hand it to the chain | 82 % |
 | 7 | run `QBSP`, `LIGHT`, `VIS` — one tool per frame | 82–99 % |
 | 8 | report `BSP READY: <bytes>` | 100 % |
@@ -54,25 +54,47 @@ possible.
 
 | stage | peak RSS | time |
 | --- | --- | --- |
-| qbsp | 7.6 MB | 0.15 s |
-| light | +4 MB | 0.05 s |
-| vis | +12 MB | 0.05 s |
-| whole chain, first compile | 24 MB | ~0.3 s |
-| each further compile in the same session | +2.6 MB | — |
+| qbsp | 6.6 MB | 0.15 s |
+| light | 9.0 MB (with its lightmap lump) | 0.15 s |
+| vis | 11.0 MB | 0.05 s |
+| whole chain, first compile | 27 MB | ~0.4 s |
+| the `.bsp` it writes | 1.6 MB, of which 1.2 MB lightmaps | — |
 
-Memory comes from upstream's design (whole level in RAM, no freeing) and from
-`MAX_MAP_LIGHTING` (already reduced 16 MB -> 1 MB here). For the PSP the
-remaining work is: free the tools' pools between runs more aggressively, and
-run the chain in a worker thread so the editor keeps drawing while vis runs.
+The lightmap lump is the big one now: 6074 faces, ~200 lumels each. `light`
+sizes that buffer from the faces instead of reserving a fixed maximum (see
+`vendor/tyrutils/README.kabluk.md`, step 9), so the memory follows the map
+instead of a guess, and no `.lit` space is reserved unless `-lit` is asked for.
+
+Memory still grows with every compile in the same session (the tools keep
+their pools, upstream assumes one run per process). For the PSP the remaining
+work is: free the tools' pools between runs more aggressively, and run the
+chain in a worker thread so the editor keeps drawing while vis runs.
 
 ## A note on lighting
 
-Quake needs at least one light or the level is pitch black, so if the map has
-no `light` entity the exporter adds one in the middle of the map
-(`origin 4096 4096 64`, default brightness). The log says so:
+There is no light entity in the map. `worldspawn` carries the brightness
+instead:
 
 ```
-NO LIGHT ENTITY: ADDED A DEFAULT LIGHT
+"light" "200"
 ```
 
-State the brightness with the FGD property once you place your own light.
+`light` reads that key as the map wide **minlight**: every surface gets at
+least that much, so the level is visible everywhere without a single lamp.
+The log says so:
+
+```
+WORLDSPAWN LIGHT: 200 (MINLIGHT)
+```
+
+and the tool confirms it:
+
+```
+using minlight value 200 from worldspawn.
+1 entities read, 0 are lights.
+```
+
+The value lives in `compile.h` (`DEFAULT_MINLIGHT`); 200 is the usual "bright
+but still shaded" Quake minlight. Add your own `light` entities from the FGD
+when you want pools of real light on top of that floor — the exporter counts
+them (`LIGHT ENTITIES: n`) but never invents one.

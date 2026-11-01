@@ -25,7 +25,19 @@
 #include <string.h>
 
 /* Use some GCC builtins */
-#ifndef ffsl
+#if defined(_MSC_VER)
+#include <intrin.h>
+static __inline int tyr_ffsl(unsigned long v)
+{
+    unsigned long index;
+
+    if (v == 0)
+	return 0;
+    _BitScanForward(&index, v);
+    return (int)index + 1;
+}
+#define ffsl(v) tyr_ffsl(v)
+#elif !defined(ffsl)
 #define ffsl __builtin_ffsl
 #endif
 

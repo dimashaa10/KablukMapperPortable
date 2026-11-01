@@ -63,17 +63,20 @@ AllocateLightDataOffset(int numsamples)
 
     file_p += numsamples;
 
-    /* align to 12 byte boundaries to match offets with 3 * lightdata */
-    if ((uintptr_t)lit_file_p % 12)
-        lit_file_p += 12 - ((uintptr_t)lit_file_p % 12);
-    lit_file_p += numsamples * 3;
+    /* .lit space only exists when coloured light was requested */
+    if (write_litfile) {
+	/* align to 12 byte boundaries to match offets with 3 * lightdata */
+	if ((uintptr_t)lit_file_p % 12)
+	    lit_file_p += 12 - ((uintptr_t)lit_file_p % 12);
+	lit_file_p += numsamples * 3;
+    }
 
     ThreadUnlock();
 
     if (file_p > file_end)
 	Error("%s: overrun", __func__);
 
-    if (lit_file_p > lit_file_end)
+    if (write_litfile && lit_file_p > lit_file_end)
 	Error("%s: overrun", __func__);
 
     return offset;
@@ -187,28 +190,70 @@ FindModelInfo(const bsp2_t *bsp)
  *  LightWorld
  * =============
  */
+/*
+ * ================
+ * EstimateLightDataSize
+ * Sum of the lumels every face needs, plus the per face alignment slack.
+ * One light style per face is assumed, which is what maps without styled
+ * light entities contain - and the editor never writes styled lights.
+ * ================
+ */
+static int32_t
+EstimateLightDataSize(const bsp2_t *bsp)
+{
+    int32_t size = 0;
+    int i, j;
+
+    for (i = 0; i < bsp->nummodels; i++) {
+	const dmodel_t *model = &bsp->dmodels[i];
+
+	for (j = 0; j < model->numfaces; j++) {
+	    const bsp2_dface_t *face = &bsp->dfaces[model->firstface + j];
+
+	    size += FaceLightmapSamples(face, modelinfo[i].offset, bsp);
+	    size += 4; /* AllocateLightDataOffset aligns every map to 4 bytes */
+	}
+    }
+
+    return size + 16;
+}
+
 static void
 LightWorld(bsp2_t *bsp)
 {
+    size_t allocsize;
+
     if (bsp->dlightdata)
 	free(bsp->dlightdata);
 
-    if (!litfile_only)
-        bsp->lightdatasize = MAX_MAP_LIGHTING; /* FIXME - remove this limit */
+    if (!litfile_only) {
+	int32_t need = EstimateLightDataSize(bsp);
 
-    bsp->dlightdata = malloc(bsp->lightdatasize * 4 + 16); /* for alignment */
+	if (need > KMP_MAX_MAP_LIGHTING)
+	    Error("lightdata %i bytes exceeds the %i byte limit",
+		  (int)need, (int)KMP_MAX_MAP_LIGHTING);
+	bsp->lightdatasize = need;
+    }
+
+    /* 3 extra bytes per lumel only for the coloured .lit file */
+    allocsize = (size_t)bsp->lightdatasize * (write_litfile ? 4 : 1) + 16;
+    bsp->dlightdata = malloc(allocsize);
     if (!bsp->dlightdata)
-	Error("%s: allocation of %i bytes failed.", __func__, bsp->lightdatasize * 4);
-    memset(bsp->dlightdata, 0, bsp->lightdatasize * 4 + 16);
+	Error("%s: allocation of %i bytes failed.", __func__, (int)allocsize);
+    memset(bsp->dlightdata, 0, allocsize);
 
     /* align filebase to a 4 byte boundary */
     filebase = file_p = (byte *)(((uintptr_t)bsp->dlightdata + 3) & ~3);
     file_end = filebase + bsp->lightdatasize;
 
     /* litfile data stored in dlightdata, after the white light */
-    lit_filebase = file_end + 12 - ((uintptr_t)file_end % 12);
-    lit_file_p = lit_filebase;
-    lit_file_end = lit_filebase + 3 * bsp->lightdatasize;
+    if (write_litfile) {
+	lit_filebase = file_end + 12 - ((uintptr_t)file_end % 12);
+	lit_file_p = lit_filebase;
+	lit_file_end = lit_filebase + 3 * bsp->lightdatasize;
+    } else {
+	lit_filebase = lit_file_p = lit_file_end = file_end;
+    }
 
     RunThreadsOn(0, bsp->numfaces, LightThread, bsp);
     logprint("Lighting Completed.\n\n");

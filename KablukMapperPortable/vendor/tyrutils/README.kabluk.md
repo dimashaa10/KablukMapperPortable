@@ -30,7 +30,9 @@ pthreads, no Win32 threads, exactly what pspsdk needs.
 Mechanical only; no algorithm was touched.
 
 1. **`include/common/tyr_port.h` (new)** — `TYR_PRINTF_ATTR` /
-   `TYR_NORETURN_ATTR` hide the GCC `__attribute__` syntax (MSVC, pspsdk),
+   `TYR_NORETURN_ATTR` / `TYR_NOINLINE` hide the GCC `__attribute__` syntax
+   (MSVC, pspsdk), `strcasecmp`/`strncasecmp` map to `_stricmp`/`_strnicmp`
+   on MSVC,
    `TYR_QBSP_ENTRY` / `TYR_LIGHT_ENTRY` / `TYR_VIS_ENTRY` give each tool's
    `main()` a private name, and the two editor hooks are declared here.
 2. The three `main()` functions are renamed through those macros and get an
@@ -60,10 +62,41 @@ Mechanical only; no algorithm was touched.
      reset on exit;
    * `common/bspfile.c` gains `UnloadBSPFile()`, which frees everything
      `LoadBSPFile()` allocated; `light` and `vis` call it before returning.
-9. **`MAX_MAP_LIGHTING` 16 MB -> 1 MB** (`include/common/bspfile.h`, override
-   with `-DKMP_MAX_MAP_LIGHTING=...`). `light` allocates four bytes per
-   lightdata byte, i.e. 64 MB per run upstream — impossible on a PSP. Our grid
-   maps need a few hundred KB; a map that exceeds 1 MB of lightdata now fails
-   with a clear message instead of eating the machine.
+9. **The lightdata lump is sized from the map** — upstream reserves
+   `MAX_MAP_LIGHTING` (16 MB) *and* multiplies it by 4 for the `.lit` variant,
+   i.e. 64 MB of RSS per run, impossible on a PSP. Now `light` adds
+   `FaceLightmapSamples()` (new, `light/ltface.c`) over every face
+   (`EstimateLightDataSize()`, `light/light.c`), allocates exactly that much,
+   skips the 3 Bytes-per-lumel `.lit` area unless `-lit` is given (the lit
+   writes in `WriteLightmaps()` are guarded), and uses
+   `KMP_MAX_MAP_LIGHTING` (16 MB, `include/common/bspfile.h`) only as a sanity
+   ceiling. One light style per face is assumed, which is what a map without
+   styled light entities has.
+10. **MSVC cannot parse GNU C** — the four places that still used it are gone:
+   * `qbsp/qbsp.h` — `Error()` uses `TYR_PRINTF_ATTR`/`TYR_NORETURN_ATTR`
+     instead of a raw `__attribute__((format,noreturn))`;
+   * `qbsp/qbsp.h` — `min()`/`max()` keep the statement-expression `typeof`
+     version for GCC and fall back to plain macros for MSVC;
+   * `qbsp/cmdlib.c` — `WIN32_LEAN_AND_MEAN` + `NOMINMAX` before `windows.h`,
+     otherwise the SDK's `min`/`max` collide with qbsp's;
+   * `light/ltface.c` (4x) and `qbsp/outside.c` — `TYR_NOINLINE` instead of a
+     bare `__attribute__((noinline))`.
+11. **`ffsl` without GCC** (`include/vis/leafbits.h`) — MSVC has no
+    `__builtin_ffsl`; a five line `_BitScanForward` wrapper fills in.
+12. **Small fixes found while porting** —
+    `common/bspfile.c` (`CopyLump`) initialises its `lumpspec` pointer (MSVC's
+    C4703 is an error under `/sdl`), `common/cmdlib.c` keeps `strupr`/
+    `strlower` out of the MSVC build (the CRT already declares them, C4273),
+    and `vis/vis.c` (`LeafFlow`) sizes the RLE buffer of `CompressRow()` from
+    the byte count instead of `portalleafs * 2 / 8`, which was one byte short
+    for leaf counts like 12.
 
-Re-syncing with a newer upstream means re-applying these nine steps.
+The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
+`_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
+basenames that exist twice — `bspfile.c`, `cmdlib.c`, `mathlib.c`, once in
+`common/` and once in `qbsp/` — their own `ObjectFileName`, which is what
+MSB8027 complains about. Do not rename or delete qbsp's private copies of
+`cmdlib`/`mathlib`/`file`/`bspfile`: `qbsp/tyr_qbsp_prefix.h` handles the
+symbol clash, the file names have to stay.
+
+Re-syncing with a newer upstream means re-applying these twelve steps.

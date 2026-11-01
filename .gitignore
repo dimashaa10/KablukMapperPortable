@@ -59,3 +59,6 @@ dkms.conf
 x64/
 KablukMapperPortable/x64/
 KablukMapperPortable/*.user
+
+# Tool logs written next to the executable
+*.log

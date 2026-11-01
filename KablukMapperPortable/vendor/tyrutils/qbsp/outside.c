@@ -168,7 +168,7 @@ WriteLeakTrail(FILE *leakfile, const vec3_t point1, const vec3_t point2)
 MarkLeakTrail
 ==============
 */
-__attribute__((noinline))
+TYR_NOINLINE
 static void
 MarkLeakTrail(leakstate_t *leak, const portal_t *portal2)
 {

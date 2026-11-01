@@ -612,8 +612,11 @@ LeafFlow(int leafnum, bsp2_dleaf_t *dleaf)
 	logprint("leaf %4i : %4i visible\n", leafnum, numvis);
     totalvis += numvis;
 
-    /* Allocate for worst case where RLE might grow the data (unlikely) */
-    compressed = malloc(portalleafs * 2 / 8);
+    /* Allocate for worst case where RLE might grow the data (unlikely).
+     * Size it from the byte count CompressRow sees, not from portalleafs:
+     * for e.g. 12 leaves that is 2 input bytes and up to 4 output bytes,
+     * while portalleafs * 2 / 8 is only 3. */
+    compressed = malloc(2 * (((portalleafs + 7) >> 3)) + 4);
     len = CompressRow(outbuffer, (portalleafs + 7) >> 3, compressed);
 
     dest = vismap_p;

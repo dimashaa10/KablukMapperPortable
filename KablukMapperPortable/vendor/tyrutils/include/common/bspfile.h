@@ -47,7 +47,7 @@
  * A grid map of ours needs a few hundred KB at most, so 1 MB it is.
  */
 #ifndef KMP_MAX_MAP_LIGHTING
-#define KMP_MAX_MAP_LIGHTING 0x100000
+#define KMP_MAX_MAP_LIGHTING 0x1000000 /* 16 MB ceiling; light allocates what it needs */
 #endif
 #define MAX_MAP_LIGHTING   KMP_MAX_MAP_LIGHTING
 #define MAX_MAP_VISIBILITY 0x1000000

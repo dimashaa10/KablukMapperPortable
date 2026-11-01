@@ -225,10 +225,18 @@ static int next_run(const Grid *grid, CompileJob *job, int *x0, int *x1,
     while (job->cur_row < MAP_ROWS) {
         int y = job->cur_row;
         int x = job->cur_col;
+        const unsigned char *row;
         int start;
         int t;
 
-        while (x < MAP_COLS && grid->solid[y][x] == CELL_EMPTY) {
+        if (y < 0 || y >= MAP_ROWS) {
+            return 0;
+        }
+        row = grid->solid[y];
+        if (x < 0 || x > MAP_COLS) {
+            x = MAP_COLS;
+        }
+        while (x < MAP_COLS && row[x] == CELL_EMPTY) {
             x++;
         }
         if (x >= MAP_COLS) {
@@ -238,7 +246,7 @@ static int next_run(const Grid *grid, CompileJob *job, int *x0, int *x1,
         }
         start = x;
         t = cell_texture(grid, x, y);
-        while (x + 1 < MAP_COLS && grid->solid[y][x + 1] != CELL_EMPTY &&
+        while (x + 1 < MAP_COLS && row[x + 1] != CELL_EMPTY &&
                cell_texture(grid, x + 1, y) == t) {
             x++;
         }
@@ -487,6 +495,18 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
             write_text(job, "\"\n");
         }
         write_text(job, "\"message\" \"Kabluk map\"\n");
+        /* worldspawn "light" is the map-wide minimum light (minlight in the
+         * light tool), so a map is never black even without light entities */
+        len = 0;
+        len = cat_str(buf, len, "\"light\" \"");
+        len = cat_int(buf, len, DEFAULT_MINLIGHT);
+        cat_str(buf, len, "\"\n");
+        write_text(job, buf);
+        len = 0;
+        len = cat_str(buf, len, "WORLDSPAWN LIGHT: ");
+        len = cat_int(buf, len, DEFAULT_MINLIGHT);
+        cat_str(buf, len, " (MINLIGHT)");
+        compile_log_add(job, buf);
 
         /* floor and ceiling slabs covering the whole map */
         write_box(job, 0, 0, -SLAB_THICKNESS, MAP_COLS * BLOCK_UNITS,
@@ -569,23 +589,12 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
                 written++;
             }
         }
-        /* light needs at least one light source, otherwise the map is black */
-        if (job->light_entities == 0) {
-            if (written > 0) {
-                len = 0;
-                len = cat_str(buf, len, "// entity ");
-                len = cat_int(buf, len, written + 1);
-                cat_str(buf, len, "\n{\n\"classname\" \"light\"\n");
-            } else {
-                len = 0;
-                len = cat_str(buf, len, "\n// entity 1\n{\n\"classname\" \"light\"\n");
-            }
-            write_text(job, buf);
-            sprintf(buf, "\"origin\" \"%d %d 64\"\n}\n",
-                    MAP_COLS * BLOCK_UNITS / 2, MAP_ROWS * BLOCK_UNITS / 2);
-            write_text(job, buf);
-            written++;
-            compile_log_add(job, "NO LIGHT ENTITY: ADDED A DEFAULT LIGHT");
+        if (job->light_entities > 0) {
+            len = 0;
+            len = cat_str(buf, len, "LIGHT ENTITIES: ");
+            len = cat_int(buf, len, job->light_entities);
+            cat_str(buf, len, " (ON TOP OF MINLIGHT)");
+            compile_log_add(job, buf);
         }
 
         job->entity_done = written;

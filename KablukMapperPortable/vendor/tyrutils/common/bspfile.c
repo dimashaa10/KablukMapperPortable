@@ -1034,7 +1034,7 @@ const lumpspec_t lumpspec_bsp2[] = {
 static int
 CopyLump(const dheader_t *header, int lumpnum, void *destptr)
 {
-    const lumpspec_t *lumpspec;
+    const lumpspec_t *lumpspec = &lumpspec_bsp29[0]; /* all cases set it */
     byte **bufferptr = destptr;
     byte *buffer = *bufferptr;
     int length;

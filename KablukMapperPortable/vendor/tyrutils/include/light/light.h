@@ -90,6 +90,8 @@ extern const dmodel_t *const *tracelist;
 
 void LightFace(bsp2_dface_t *face, const modelinfo_t *modelinfo,
 	       const bsp2_t *bsp);
+int FaceLightmapSamples(const bsp2_dface_t *face, const vec3_t offset,
+			const bsp2_t *bsp);
 void MakeTnodes(const bsp2_t *bsp);
 
 extern float scaledist;

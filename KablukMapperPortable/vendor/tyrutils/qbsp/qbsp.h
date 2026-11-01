@@ -208,6 +208,11 @@ vec_t VectorNormalize(vec3_t v);
 void VectorInverse(vec3_t v);
 void VectorScale(const vec3_t v, const vec_t scale, vec3_t out);
 
+#if defined(_MSC_VER)
+/* MSVC has no typeof() and no statement expressions */
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#else
 #define min(a,b) ({		\
 	typeof(a) a_ = (a);	\
 	typeof(b) b_ = (b);	\
@@ -220,6 +225,7 @@ void VectorScale(const vec3_t v, const vec_t scale, vec3_t out);
 	(void)(&a_ == &b_);	\
 	(a_ > b_) ? a_ : b_;	\
 })
+#endif
 
 #define stringify__(x) #x
 #define stringify(x) stringify__(x)
@@ -578,6 +584,6 @@ void PrintMem(void);
 
 void Message(int MsgType, ...);
 void Error(const char *error, ...)
-    __attribute__((format(printf,1,2),noreturn));
+    TYR_PRINTF_ATTR(1, 2) TYR_NORETURN_ATTR;
 
 #endif

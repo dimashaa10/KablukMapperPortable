@@ -48,6 +48,11 @@ enum {
 typedef unsigned char byte;
 
 /* min and max macros with type checking */
+#if defined(_MSC_VER)
+/* MSVC has no typeof() and no statement expressions */
+#define qmax(a,b) (((a) > (b)) ? (a) : (b))
+#define qmin(a,b) (((a) < (b)) ? (a) : (b))
+#else
 #define qmax(a,b) ({      \
     typeof(a) a_ = (a);   \
     typeof(b) b_ = (b);   \
@@ -60,13 +65,16 @@ typedef unsigned char byte;
     (void)(&a_ == &b_);   \
     (a_ < b_) ? a_ : b_;  \
 })
+#endif
 
 /* set these before calling CheckParm */
 extern int myargc;
 extern char **myargv;
 
-char *strupr(char *in);
+#if !defined(_MSC_VER)
+char *strupr(char *in); /* MSVC: the CRT already declares these */
 char *strlower(char *in);
+#endif
 int Q_strncasecmp(const char *s1, const char *s2, int n);
 int Q_strcasecmp(const char *s1, const char *s2);
 void Q_getwd(char *out);
