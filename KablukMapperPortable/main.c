@@ -22,10 +22,13 @@
  *   1..4 / TAB        pick a tool
  *   Q / E             fold the left / right panel (PSP: L / R)
  *   ENTER             editor settings (PSP: SELECT)
+ *   F2                compile map window (PSP: START)
  *   ESC               quit
  */
 #include <SDL.h>
 
+#include "compile.h"
+#include "compileui.h"
 #include "config.h"
 #include "fgd.h"
 #include "gfx.h"
@@ -52,6 +55,8 @@ typedef struct App {
     Textures textures;
     Picker picker;
     PropsView props;
+    CompileJob job;
+    CompileUi compile_ui;
 
     int running;
     int tool;
@@ -213,6 +218,10 @@ static void app_handle_key(const SDL_KeyboardEvent *key)
         menu_open_settings(&app.menu);
         break;
 
+    case KEY_OPEN_COMPILE:
+        compileui_open(&app.compile_ui);
+        break;
+
     case KEY_PANEL_LEFT:
         app.left_open = !app.left_open;
         app_refresh_layout();
@@ -305,6 +314,18 @@ static void app_handle_event(const SDL_Event *event)
         app_handle_picker_result(picker_handle_event(&app.picker, event));
         return;
     }
+    if (compileui_is_open(&app.compile_ui)) {
+        int action = compileui_handle_event(&app.compile_ui, event, &app.job);
+
+        if (action == COMPILEUI_COMPILE) {
+            compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad);
+        } else if (action == COMPILEUI_BROWSE) {
+            menu_open_browse(&app.menu, BROWSE_DIR, MENU_CLOSED);
+        } else if (action == COMPILEUI_CLOSE) {
+            compileui_close(&app.compile_ui);
+        }
+        return;
+    }
 
     switch (event->type) {
     case SDL_KEYDOWN:
@@ -377,6 +398,7 @@ static void app_render(void)
         props_draw(&app.gfx, &app.grid, &app.fgd, &app.props);
     }
     picker_draw(&app.gfx, &app.picker, &app.fgd, &app.textures, &app.wad);
+    compileui_draw(&app.gfx, &app.compile_ui, &app.job, &app.settings);
     menu_draw(&app.gfx, &app.menu);
 
     gfx_frame_end(&app.gfx);
@@ -418,6 +440,8 @@ int main(int argc, char *argv[])
     menu_init(&app.menu, &app.settings);
     picker_init(&app.picker);
     props_view_init(&app.props);
+    compile_init(&app.job);
+    compileui_init(&app.compile_ui);
 
     app.running = 1;
     app.tool = TOOL_SELECT;
@@ -443,6 +467,11 @@ int main(int argc, char *argv[])
         frame_start = SDL_GetTicks();
 
         app_reload_wad();
+
+        /* the compile job runs a small chunk per frame */
+        if (compile_is_running(&app.job)) {
+            compile_step(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad);
+        }
 
         while (SDL_PollEvent(&event)) {
             app_handle_event(&event);

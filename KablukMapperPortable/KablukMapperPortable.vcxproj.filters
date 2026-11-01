@@ -54,6 +54,12 @@
     <ClCompile Include="textures.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="compile.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="compileui.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="picker.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -100,6 +106,12 @@
     </ClInclude>
     <ClInclude Include="textures.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="compile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="compileui.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picker.h">
       <Filter>Файлы заголовков</Filter>

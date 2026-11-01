@@ -3,7 +3,7 @@
  *
  * One place for every key binding. On the desktop these are keyboard
  * stand-ins; when the PSP build appears only this file has to change
- * (PSP L / R / SELECT / cross / square).
+ * (PSP L / R / SELECT / START / cross / circle).
  */
 #ifndef KMP_KEYS_H
 #define KMP_KEYS_H
@@ -22,6 +22,7 @@
 #define KEY_PANEL_RIGHT SDLK_e /* PSP: R - fold the right property panel */
 
 #define KEY_OPEN_SETTINGS SDLK_RETURN /* PSP: SELECT - editor settings */
+#define KEY_OPEN_COMPILE SDLK_F2      /* PSP: START - compile map      */
 
 #define KEY_QUIT SDLK_ESCAPE
 

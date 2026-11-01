@@ -152,6 +152,8 @@
     <ClCompile Include="fgd.c" />
     <ClCompile Include="wad.c" />
     <ClCompile Include="textures.c" />
+    <ClCompile Include="compile.c" />
+    <ClCompile Include="compileui.c" />
     <ClCompile Include="picker.c" />
   </ItemGroup>
   <ItemGroup>
@@ -169,6 +171,8 @@
     <ClInclude Include="fgd.h" />
     <ClInclude Include="wad.h" />
     <ClInclude Include="textures.h" />
+    <ClInclude Include="compile.h" />
+    <ClInclude Include="compileui.h" />
     <ClInclude Include="picker.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

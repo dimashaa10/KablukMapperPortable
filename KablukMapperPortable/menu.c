@@ -41,6 +41,8 @@
 #define BR_ROW_H 14
 #define BR_ROW_TOP (BR_LIST_Y - 3)
 
+static void browse_open(Menu *menu, int target);
+
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
 /* ------------------------------------------------------------------ */
@@ -99,6 +101,7 @@ void menu_init(Menu *menu, Settings *settings)
     menu->sel = MENU_ROW_WAD;
     menu->hover = -1;
     menu->browse_target = BROWSE_WAD;
+    menu->return_mode = MENU_SETTINGS;
     menu->path[0] = '\0';
     menu->count = 0;
     menu->cur = 0;
@@ -115,6 +118,12 @@ void menu_open_settings(Menu *menu)
     menu->mode = MENU_SETTINGS;
     menu->sel = MENU_ROW_WAD;
     menu->hover = -1;
+}
+
+void menu_open_browse(Menu *menu, int target, int return_mode)
+{
+    browse_open(menu, target);
+    menu->return_mode = return_mode;
 }
 
 void menu_close(Menu *menu)
@@ -152,6 +161,7 @@ static void browse_refresh(Menu *menu)
 static void browse_open(Menu *menu, int target)
 {
     menu->browse_target = target;
+    menu->return_mode = MENU_SETTINGS;
     menu->mode = MENU_BROWSE;
 
     if (target == BROWSE_WAD) {
@@ -204,7 +214,7 @@ static void browse_activate(Menu *menu, int index)
     switch (entry->kind) {
     case FS_KIND_USE_THIS:
         fs_copy(menu->settings->out_dir, PATH_LEN, menu->path);
-        menu->mode = MENU_SETTINGS;
+        menu->mode = menu->return_mode;
         break;
     case FS_KIND_PARENT:
         fs_parent(menu->path, PATH_LEN);
@@ -217,7 +227,7 @@ static void browse_activate(Menu *menu, int index)
         break;
     default: /* file */
         fs_join(menu->settings->wad_path, PATH_LEN, menu->path, entry->name);
-        menu->mode = MENU_SETTINGS;
+        menu->mode = menu->return_mode;
         break;
     }
 }
@@ -272,7 +282,11 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
     case SDL_KEYDOWN:
         switch (event->key.keysym.sym) {
         case KEY_OPEN_SETTINGS:
-            menu_close(menu);
+            if (menu->mode == MENU_BROWSE) {
+                menu->mode = menu->return_mode;
+            } else {
+                menu_close(menu);
+            }
             return 1;
         case KEY_UP:
             if (menu->mode == MENU_SETTINGS) {
@@ -303,7 +317,7 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
             return 1;
         case KEY_CANCEL:
             if (menu->mode == MENU_BROWSE) {
-                menu->mode = MENU_SETTINGS;
+                menu->mode = menu->return_mode;
             } else {
                 menu_close(menu);
             }

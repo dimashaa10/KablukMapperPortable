@@ -37,6 +37,7 @@ typedef struct Menu {
     int hover;  /* mouse hover (-1 = none)                  */
 
     int browse_target; /* BROWSE_WAD / BROWSE_DIR */
+    int return_mode;   /* where the browser goes back to: MENU_SETTINGS or MENU_CLOSED */
     char path[PATH_LEN];
     FsEntry entries[FS_MAX_ENTRIES];
     int count;
@@ -47,6 +48,10 @@ typedef struct Menu {
 void menu_init(Menu *menu, Settings *settings);
 int menu_is_open(const Menu *menu);
 void menu_open_settings(Menu *menu);
+
+/* Opens the file browser on its own (used by the compile window to pick the
+ * output folder); after picking or cancelling it returns to 'return_mode'. */
+void menu_open_browse(Menu *menu, int target, int return_mode);
 void menu_close(Menu *menu);
 
 /* Returns 1 when the event was used by the menu. */
