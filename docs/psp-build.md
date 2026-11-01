@@ -19,7 +19,20 @@ ls /c/pspdev/psp/include/SDL2/SDL.h
 ls /c/pspdev/psp/lib/libSDL2.a
 ```
 
-If they do not, install it from the pspdev shell: `psp-pacman -S sdl2`.
+If they do not, install it from the pspdev shell: `psp-pacman -S sdl2`. When
+`make` complains instead - "SDL.h: No such file or directory" - ask it what it
+found:
+
+```sh
+make sdk-info
+```
+
+It prints `PSPDEV`, `PSPSDK`, the SDL2 header and library folders it picked,
+whether `psp-gcc` and `psp-pacman` are on `PATH`, and every `SDL.h` and
+`libSDL2*.a` under the toolchain. The Makefile looks for `SDL.h` by name in
+`<pspdev>/psp/include/SDL2`, `<pspdev>/psp/include`,
+`<pspdev>/psp/sdk/include` and whatever `psp-pkg-config --cflags SDL2` says, so
+an installed SDL2 is found even when it sits somewhere unusual.
 
 ## Build
 
@@ -167,7 +180,8 @@ XMB, and `ESC` / circle leaves the editor back to the start screen.
 | --- | --- |
 | `psp-config: command not found` | `PATH` / `PSPDEV` is not set in this shell - see Build |
 | `/pspdev/psp/sdk/lib/build.mak: No such file or directory` | the Windows `psp-config` dropped the `C:` of `C:\pspdev`; say where it is: `make PSPDEV=/c/pspdev` (the Makefile also tries `/c/pspdev/psp/sdk` by itself) |
-| `SDL.h: No such file or directory` | SDL2 is not in the pspdev prefix: `psp-pacman -S sdl2` |
+| `SDL.h: No such file or directory` | SDL2 is not in the pspdev prefix: `psp-pacman -S sdl2`, then `make sdk-info` to see where it landed |
+| `cannot find -lSDL2main` / `-lSDL2` | the headers are there but the static libraries are not; the same `psp-pacman -S sdl2` fixes it, `make sdk-info` lists the `.a` files it found |
 | `EBOOT.PBP` builds, screen stays black | the firmware is older than 6.00 (`PSP_FW_VERSION` in the Makefile), or the folder is not `ms0:/PSP/GAME/KABLUK` |
 | starts, then "WAD MISSING" in the editor | pick the wad in the settings, or put it next to `EBOOT.PBP` |
 | the compile stops with an allocation error on a big map | the heap is what is left of the PSP's 32 MB after the screen, the textures and the wad; compile with a smaller wad loaded |

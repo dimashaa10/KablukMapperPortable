@@ -52,6 +52,36 @@ ifeq ($(wildcard $(PSPDEV)/psp/include/SDL2/SDL.h),)
 PSPDEV := $(patsubst %/psp/sdk,%,$(PSPSDK))
 endif
 
+# ---------------------------------------------------------------------------
+# SDL2 for the PSP. The toolchain package puts it in <pspdev>/psp/include/SDL2
+# and <pspdev>/psp/lib; psp-pkg-config knows when it is somewhere else. The
+# headers are looked for by name, because a wrong -I only shows up as
+# "SDL.h: No such file or directory" 21 times over.
+# ---------------------------------------------------------------------------
+SDL2_INC_TRIES = $(patsubst -I%,%,$(shell psp-pkg-config --cflags SDL2 2>/dev/null)) \
+                 $(PSPDEV)/psp/include/SDL2 $(PSPDEV)/psp/include \
+                 $(PSPDEV)/psp/sdk/include
+
+SDL2_INC := $(firstword $(foreach dir,$(SDL2_INC_TRIES),\
+                $(if $(wildcard $(dir)/SDL.h),$(dir))))
+
+SDL2_LIBDIR_TRIES = $(patsubst -L%,%,$(shell psp-pkg-config --libs SDL2 2>/dev/null)) \
+                    $(PSPDEV)/psp/lib $(PSPDEV)/psp/sdk/lib
+
+SDL2_LIBDIR := $(firstword $(foreach dir,$(SDL2_LIBDIR_TRIES),\
+                   $(if $(wildcard $(dir)/libSDL2.a),$(dir))))
+
+ifeq ($(SDL2_INC),)
+$(warning SDL2 headers not found - looked for SDL.h in: $(SDL2_INC_TRIES))
+$(warning install SDL2 into the toolchain: psp-pacman -S sdl2   ("make sdk-info" shows what was found))
+SDL2_INC := $(PSPDEV)/psp/include/SDL2
+endif
+
+ifeq ($(SDL2_LIBDIR),)
+$(warning libSDL2.a not found - looked in: $(SDL2_LIBDIR_TRIES))
+SDL2_LIBDIR := $(PSPDEV)/psp/lib
+endif
+
 OBJS = main.o input.o gfx.o grid.o ui.o font.o layout.o props.o settings.o \
        fs.o menu.o fgd.o wad.o textures.o picker.o compile.o compileui.o \
        bspchain.o keyboard.o values.o mapfile.o
@@ -67,12 +97,11 @@ TYR_OBJS = $(TYR_SRC:.c=.o)
 OBJS += $(TYR_OBJS)
 
 CFLAGS = -O2 -G0 -Wall -std=gnu99 -D__PSP__ -DKMP_HAVE_PSP \
-         -I. -I$(PSPDEV)/psp/include -I$(PSPDEV)/psp/include/SDL2 \
-         -DTYRUTILS_VERSION=v0.17-kabluk
+         -I. -I$(SDL2_INC) -DTYRUTILS_VERSION=v0.17-kabluk
 
 # static link order matters: SDL2 first, then the psp libraries it needs.
-LIBS = -lSDL2main -lSDL2 -lGL -lpspvram -lpspaudio -lpspvfpu -lpsphprm \
-       -lpsppower -lpsprtc -lm
+LIBS = -L$(SDL2_LIBDIR) -lSDL2main -lSDL2 -lGL -lpspvram -lpspaudio -lpspvfpu \
+       -lpsphprm -lpsppower -lpsprtc -lm
 
 # The vendored TyrUtils is C99 and warns on everything GCC 15 knows.
 $(TYR_OBJS): %.o: %.c
@@ -96,4 +125,17 @@ dist: EBOOT.PBP
 	@echo "copy the contents of dist/ to the root of the memory stick,"
 	@echo "then start Kabluk Mapper Portable from the Game menu."
 
-.PHONY: dist
+# What the build found, for when something is missing on this machine.
+sdk-info:
+	@echo "PSPDEV      : $(PSPDEV)"
+	@echo "PSPSDK      : $(PSPSDK)"
+	@echo "SDL2 headers: $(SDL2_INC)"
+	@echo "SDL2 library: $(SDL2_LIBDIR)"
+	@echo "psp-gcc     : $$(command -v psp-gcc || echo '(not on PATH)')"
+	@echo "psp-pacman  : $$(command -v psp-pacman || echo '(not on PATH)')"
+	@echo "SDL.h files under $(PSPDEV):"
+	@-find "$(PSPDEV)" -maxdepth 6 -name SDL.h 2>/dev/null | head -5
+	@echo "libSDL2*.a files under $(PSPDEV):"
+	@-find "$(PSPDEV)" -maxdepth 6 -name 'libSDL2*.a' 2>/dev/null | head -5
+
+.PHONY: dist sdk-info
