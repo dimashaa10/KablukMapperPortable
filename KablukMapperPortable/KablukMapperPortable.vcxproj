@@ -149,6 +149,10 @@
     <ClCompile Include="settings.c" />
     <ClCompile Include="fs.c" />
     <ClCompile Include="menu.c" />
+    <ClCompile Include="fgd.c" />
+    <ClCompile Include="wad.c" />
+    <ClCompile Include="textures.c" />
+    <ClCompile Include="picker.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h" />
@@ -162,8 +166,15 @@
     <ClInclude Include="fs.h" />
     <ClInclude Include="menu.h" />
     <ClInclude Include="keys.h" />
+    <ClInclude Include="fgd.h" />
+    <ClInclude Include="wad.h" />
+    <ClInclude Include="textures.h" />
+    <ClInclude Include="picker.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopyFgd" AfterTargets="Build">
+    <Copy SourceFiles="$(SolutionDir)resources\Quake.fgd" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(SolutionDir)resources\Quake.fgd')" />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

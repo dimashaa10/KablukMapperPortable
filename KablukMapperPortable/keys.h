@@ -16,7 +16,7 @@
 #define KEY_DOWN SDLK_DOWN
 
 #define KEY_CONFIRM SDLK_x /* PSP: cross  */
-#define KEY_CANCEL SDLK_z  /* PSP: square */
+#define KEY_CANCEL SDLK_z  /* PSP: circle - also closes the lists */
 
 #define KEY_PANEL_LEFT SDLK_q  /* PSP: L - fold the left tool panel    */
 #define KEY_PANEL_RIGHT SDLK_e /* PSP: R - fold the right property panel */

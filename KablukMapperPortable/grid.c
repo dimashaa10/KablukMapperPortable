@@ -21,23 +21,26 @@ int grid_is_shell(int cx, int cy)
     return (cx <= 0 || cy <= 0 || cx >= MAP_COLS - 1 || cy >= MAP_ROWS - 1);
 }
 
-int grid_shell_cells(void)
-{
-    return 2 * MAP_COLS + 2 * (MAP_ROWS - 2);
-}
-
 void grid_build_shell(Grid *grid)
 {
     int x;
     int y;
 
     for (x = 0; x < MAP_COLS; x++) {
-        grid->cells[0][x] = CELL_SOLID;
-        grid->cells[MAP_ROWS - 1][x] = CELL_SOLID;
+        grid->solid[0][x] = CELL_SOLID;
+        grid->solid[MAP_ROWS - 1][x] = CELL_SOLID;
+        grid->tex[0][x] = TEX_NONE;
+        grid->tex[MAP_ROWS - 1][x] = TEX_NONE;
+        grid->entity[0][x] = 0;
+        grid->entity[MAP_ROWS - 1][x] = 0;
     }
     for (y = 0; y < MAP_ROWS; y++) {
-        grid->cells[y][0] = CELL_SOLID;
-        grid->cells[y][MAP_COLS - 1] = CELL_SOLID;
+        grid->solid[y][0] = CELL_SOLID;
+        grid->solid[y][MAP_COLS - 1] = CELL_SOLID;
+        grid->tex[y][0] = TEX_NONE;
+        grid->tex[y][MAP_COLS - 1] = TEX_NONE;
+        grid->entity[y][0] = 0;
+        grid->entity[y][MAP_COLS - 1] = 0;
     }
 }
 
@@ -48,9 +51,13 @@ void grid_clear_map(Grid *grid)
 
     for (y = 0; y < MAP_ROWS; y++) {
         for (x = 0; x < MAP_COLS; x++) {
-            grid->cells[y][x] = CELL_EMPTY;
+            grid->solid[y][x] = CELL_EMPTY;
+            grid->tex[y][x] = TEX_NONE;
+            grid->entity[y][x] = 0;
         }
     }
+    grid->sel_x = -1;
+    grid->sel_y = -1;
     grid_build_shell(grid);
 }
 
@@ -63,15 +70,42 @@ void grid_init(Grid *grid)
     grid->cam_y = 0;
 }
 
+void grid_paint(Grid *grid, int cx, int cy, int tex_index)
+{
+    if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
+        return;
+    }
+    grid->solid[cy][cx] = CELL_SOLID;
+    if (tex_index >= 0 && tex_index < WAD_MAX_TEX) {
+        grid->tex[cy][cx] = (unsigned short)tex_index;
+    }
+}
+
 void grid_set_cell(Grid *grid, int cx, int cy, unsigned char value)
 {
     if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
         return;
     }
-    if (value == CELL_EMPTY && grid_is_shell(cx, cy)) {
+    if (value == CELL_EMPTY) {
+        grid_erase(grid, cx, cy);
+        return;
+    }
+    grid->solid[cy][cx] = CELL_SOLID;
+}
+
+void grid_erase(Grid *grid, int cx, int cy)
+{
+    if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
+        return;
+    }
+    if (grid_is_shell(cx, cy)) {
         return; /* the shell stays: no holes into the void */
     }
-    grid->cells[cy][cx] = value;
+    grid->solid[cy][cx] = CELL_EMPTY;
+    grid->tex[cy][cx] = TEX_NONE;
+    if (grid->sel_x == cx && grid->sel_y == cy) {
+        grid_select_none(grid);
+    }
 }
 
 unsigned char grid_get_cell(const Grid *grid, int cx, int cy)
@@ -79,7 +113,68 @@ unsigned char grid_get_cell(const Grid *grid, int cx, int cy)
     if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
         return CELL_EMPTY;
     }
-    return grid->cells[cy][cx];
+    return grid->solid[cy][cx];
+}
+
+int grid_get_tex(const Grid *grid, int cx, int cy)
+{
+    if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
+        return TEX_NONE;
+    }
+    return (int)grid->tex[cy][cx];
+}
+
+void grid_set_entity(Grid *grid, int cx, int cy, int class_index)
+{
+    if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
+        return;
+    }
+    if (grid_is_shell(cx, cy)) {
+        return; /* entities do not belong in the sealing shell */
+    }
+    if (class_index < 0 || class_index > 254) {
+        grid->entity[cy][cx] = 0;
+        if (grid->sel_x == cx && grid->sel_y == cy) {
+            grid_select_none(grid);
+        }
+        return;
+    }
+    grid->entity[cy][cx] = (unsigned char)(class_index + 1);
+}
+
+int grid_entity_at(const Grid *grid, int cx, int cy)
+{
+    if (cx < 0 || cx >= MAP_COLS || cy < 0 || cy >= MAP_ROWS) {
+        return -1;
+    }
+    if (grid->entity[cy][cx] == 0) {
+        return -1;
+    }
+    return (int)grid->entity[cy][cx] - 1;
+}
+
+void grid_select(Grid *grid, int cx, int cy)
+{
+    if (grid_entity_at(grid, cx, cy) < 0) {
+        grid_select_none(grid);
+        return;
+    }
+    grid->sel_x = cx;
+    grid->sel_y = cy;
+}
+
+void grid_select_none(Grid *grid)
+{
+    grid->sel_x = -1;
+    grid->sel_y = -1;
+}
+
+int grid_selected_class(const Grid *grid)
+{
+    if (grid->sel_x < 0 || grid->sel_y < 0) {
+        return -1;
+    }
+    return grid_entity_at(grid, grid->sel_x, grid->sel_y);
 }
 
 void grid_clamp_camera(Grid *grid, const Layout *layout)
@@ -178,7 +273,50 @@ static void grid_draw_lines(Gfx *g, const Grid *grid, const Layout *layout)
     }
 }
 
-static void grid_draw_cells(Gfx *g, const Grid *grid, const Layout *layout)
+static void grid_draw_blocks(Gfx *g, const Grid *grid, const Layout *layout,
+                             Textures *textures, const Wad *wad)
+{
+    int cx;
+    int cy;
+    int sx;
+    int sy;
+    int tex_index;
+    int inner = CELL_SIZE - 2;
+    int cx_end = grid->cam_x + layout->cols;
+    int cy_end = grid->cam_y + layout->rows;
+
+    if (cx_end > MAP_COLS) {
+        cx_end = MAP_COLS;
+    }
+    if (cy_end > MAP_ROWS) {
+        cy_end = MAP_ROWS;
+    }
+
+    for (cy = grid->cam_y; cy < cy_end; cy++) {
+        for (cx = grid->cam_x; cx < cx_end; cx++) {
+            if (grid->solid[cy][cx] == CELL_EMPTY) {
+                continue;
+            }
+            grid_cell_to_screen(grid, cx, cy, &sx, &sy);
+            sx += layout->grid_x + 1;
+            sy += layout->grid_y + 1;
+
+            tex_index = (int)grid->tex[cy][cx];
+            if (tex_index != TEX_NONE && tex_index < wad->count) {
+                SDL_Texture *texture = textures_get(g, textures, wad, tex_index);
+                if (texture != NULL) {
+                    gfx_blit(g, texture, sx, sy, inner, inner);
+                    continue;
+                }
+            }
+            /* no texture (shell cells, or a wad that is not loaded yet) */
+            gfx_rect(g, sx, sy, inner, inner, COL_SOLID);
+            gfx_outline(g, sx, sy, inner, inner, COL_SOLID_EDGE);
+        }
+    }
+}
+
+static void grid_draw_entities(Gfx *g, const Grid *grid, const Layout *layout)
 {
     int cx;
     int cy;
@@ -196,15 +334,23 @@ static void grid_draw_cells(Gfx *g, const Grid *grid, const Layout *layout)
 
     for (cy = grid->cam_y; cy < cy_end; cy++) {
         for (cx = grid->cam_x; cx < cx_end; cx++) {
-            if (grid->cells[cy][cx] == CELL_EMPTY) {
+            int selected;
+
+            if (grid->entity[cy][cx] == 0) {
                 continue;
             }
+            selected = (cx == grid->sel_x && cy == grid->sel_y);
             grid_cell_to_screen(grid, cx, cy, &sx, &sy);
             sx += layout->grid_x;
             sy += layout->grid_y;
-            gfx_rect(g, sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2, COL_SOLID);
-            gfx_outline(g, sx + 1, sy + 1, CELL_SIZE - 2, CELL_SIZE - 2,
-                        COL_SOLID_EDGE);
+
+            /* small green square marks a point entity */
+            gfx_rect(g, sx + 5, sy + 5, 6, 6, COL_ENTITY);
+            gfx_outline(g, sx + 4, sy + 4, 8, 8, COL_BG);
+            if (selected) {
+                gfx_outline(g, sx + 2, sy + 2, CELL_SIZE - 4, CELL_SIZE - 4,
+                            COL_ENTITY_SEL);
+            }
         }
     }
 }
@@ -262,13 +408,15 @@ static void grid_draw_status(Gfx *g, const Grid *grid, const Layout *layout)
     gfx_text_int(g, tx, ty, grid->cursor_y, COL_TEXT, 1);
 }
 
-void grid_draw(Gfx *g, const Grid *grid, const Layout *layout)
+void grid_draw(Gfx *g, const Grid *grid, const Layout *layout, Textures *textures,
+               const Wad *wad)
 {
     gfx_rect(g, layout->grid_x, layout->grid_y, layout->grid_w, layout->grid_h,
              COL_BG);
     grid_draw_lines(g, grid, layout);
     grid_draw_map_edge(g, grid, layout);
-    grid_draw_cells(g, grid, layout);
+    grid_draw_blocks(g, grid, layout, textures, wad);
+    grid_draw_entities(g, grid, layout);
     grid_draw_cursor(g, grid, layout);
     grid_draw_status(g, grid, layout);
 }

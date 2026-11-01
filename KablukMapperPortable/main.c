@@ -5,31 +5,40 @@
  * with pspsdk + SDL2 later:
  *   - fixed 480x272 resolution (PSP LCD), all layout in config.h
  *   - plain C, no WinAPI, no SDL_ttf, no dynamic memory
- *   - mouse OR d-pad/keyboard drive the same cursor, so the editor is fully
- *     usable without a mouse
- *   - one cell in the grid is one 128x128x128 unit block, the map always has
- *     a floor/ceiling shell so nothing can leak into the void
+ *   - entity definitions come from Quake.fgd, textures from the .wad chosen
+ *     in the editor settings
+ *   - one cell is one 128x128x128 unit block and the map always keeps its
+ *     floor/ceiling shell, so nothing can leak into the void
+ *
+ * Tools (left panel):
+ *   SELECT   - click a point entity to show its properties on the right
+ *   BLOCK    - place a block with the current texture, right click erases
+ *   ENTITY   - pops the point entity list, then click places one
+ *   TEXTURE  - pops the texture list of the selected wad
  *
  * Controls (desktop now, PSP buttons later - see keys.h):
  *   mouse / d-pad     move the grid cursor
- *   left click / X    place a block
- *   right click / Z   erase a block (the outer shell cannot be erased)
- *   1..4 / TAB        pick a tool in the left panel
- *   Q / E             fold the left / right panel  (PSP: L / R)
- *   ENTER             editor settings              (PSP: SELECT)
+ *   X / Z             confirm / cancel (cross / circle on the PSP)
+ *   1..4 / TAB        pick a tool
+ *   Q / E             fold the left / right panel (PSP: L / R)
+ *   ENTER             editor settings (PSP: SELECT)
  *   ESC               quit
  */
 #include <SDL.h>
 
 #include "config.h"
+#include "fgd.h"
 #include "gfx.h"
 #include "grid.h"
 #include "keys.h"
 #include "layout.h"
 #include "menu.h"
+#include "picker.h"
 #include "props.h"
 #include "settings.h"
+#include "textures.h"
 #include "ui.h"
+#include "wad.h"
 
 typedef struct App {
     SDL_Window *window;
@@ -38,6 +47,12 @@ typedef struct App {
     Layout layout;
     Settings settings;
     Menu menu;
+    Fgd fgd;
+    Wad wad;
+    Textures textures;
+    Picker picker;
+    PropsView props;
+
     int running;
     int tool;
     int hover_tool;
@@ -45,117 +60,203 @@ typedef struct App {
     int right_open;
     int mouse_x;
     int mouse_y;
+
+    int current_tex;   /* texture used for new blocks, -1 = none */
+    int entity_class;  /* last point entity class picked, -1 = none */
+    char loaded_wad[PATH_LEN];
 } App;
 
-static void app_refresh_layout(App *app)
-{
-    layout_compute(&app->layout, app->left_open, app->right_open);
-    grid_clamp_camera(&app->grid, &app->layout);
-}
+/* The editor state is a few hundred kilobytes (fgd text, tex cache), so it
+ * lives in static memory instead of the stack - PSP stacks are small. */
+static App app;
 
-static void app_place(App *app, unsigned char value)
+static void app_refresh_layout(void)
 {
-    grid_set_cell(&app->grid, app->grid.cursor_x, app->grid.cursor_y, value);
+    layout_compute(&app.layout, app.left_open, app.right_open);
+    grid_clamp_camera(&app.grid, &app.layout);
 }
 
 /* Mouse position in window pixels -> 480x272 logical pixels. */
-static void app_update_mouse(App *app)
+static void app_update_mouse(void)
 {
-    int mx;
-    int my;
-    int ww;
-    int wh;
+    int mx = app.mouse_x;
+    int my = app.mouse_y;
+    int ww = 0;
+    int wh = 0;
 
-    mx = app->mouse_x;
-    my = app->mouse_y;
-    SDL_GetWindowSize(app->window, &ww, &wh);
+    SDL_GetWindowSize(app.window, &ww, &wh);
     if (ww > 0 && wh > 0 && (ww != SCREEN_W || wh != SCREEN_H)) {
         mx = mx * SCREEN_W / ww;
         my = my * SCREEN_H / wh;
     }
-    app->mouse_x = mx;
-    app->mouse_y = my;
+    app.mouse_x = mx;
+    app.mouse_y = my;
 }
 
-/* The grid is only under the space between the panels, so this also tells
- * us whether the mouse is over the map at all. */
-static void app_move_cursor_to_mouse(App *app)
+static int app_over_left_panel(void)
+{
+    return app.left_open && app.mouse_x < PANEL_W;
+}
+
+static int app_over_right_panel(void)
+{
+    return app.right_open && app.mouse_x >= SCREEN_W - RIGHT_PANEL_W;
+}
+
+/* Reloads the wad + texture cache when the path changed in the settings. */
+static void app_reload_wad(void)
+{
+    int i;
+
+    for (i = 0; i < PATH_LEN; i++) {
+        if (app.settings.wad_path[i] != app.loaded_wad[i]) {
+            break;
+        }
+        if (app.settings.wad_path[i] == '\0') {
+            return;
+        }
+    }
+    if (i == PATH_LEN) {
+        return;
+    }
+
+    for (i = 0; i < PATH_LEN; i++) {
+        app.loaded_wad[i] = app.settings.wad_path[i];
+    }
+    textures_reset(&app.textures);
+    if (wad_load(&app.wad, app.settings.wad_path) > 0) {
+        app.current_tex = 0;
+        SDL_Log("WAD loaded: %d textures, palette %s", app.wad.count,
+                app.wad.has_palette ? "found" : "missing (grey preview)");
+    } else {
+        app.wad.count = 0;
+        app.current_tex = -1;
+        if (app.settings.wad_path[0] != '\0') {
+            SDL_Log("WAD not readable: %s", app.settings.wad_path);
+        }
+    }
+    picker_close(&app.picker);
+}
+
+static void app_select_tool(int tool)
+{
+    app.tool = tool;
+    if (tool == TOOL_ENTITY) {
+        picker_open_entities(&app.picker, &app.fgd, app.entity_class);
+    } else if (tool == TOOL_TEXTURE) {
+        picker_open_textures(&app.picker, &app.wad, app.current_tex);
+    }
+}
+
+static void app_move_cursor_to_mouse(void)
 {
     int cx;
     int cy;
 
-    if (grid_screen_to_cell(&app->grid, &app->layout, app->mouse_x, app->mouse_y,
-                            &cx, &cy)) {
-        app->grid.cursor_x = cx;
-        app->grid.cursor_y = cy;
+    if (grid_screen_to_cell(&app.grid, &app.layout, app.mouse_x, app.mouse_y, &cx,
+                            &cy)) {
+        app.grid.cursor_x = cx;
+        app.grid.cursor_y = cy;
+        grid_keep_cursor_visible(&app.grid, &app.layout);
     }
 }
 
-static int app_over_left_panel(const App *app)
+/* X / left click */
+static void app_primary_action(void)
 {
-    return app->left_open && app->mouse_x < PANEL_W;
+    int cx = app.grid.cursor_x;
+    int cy = app.grid.cursor_y;
+
+    switch (app.tool) {
+    case TOOL_SELECT:
+        grid_select(&app.grid, cx, cy);
+        break;
+    case TOOL_ENTITY:
+        if (app.entity_class >= 0) {
+            grid_set_entity(&app.grid, cx, cy, app.entity_class);
+            grid_select(&app.grid, cx, cy);
+        }
+        break;
+    default: /* BLOCK and TEXTURE tools place blocks */
+        grid_paint(&app.grid, cx, cy, app.current_tex);
+        break;
+    }
 }
 
-static int app_over_right_panel(const App *app)
+/* Z / right click */
+static void app_secondary_action(void)
 {
-    return app->right_open && app->mouse_x >= SCREEN_W - RIGHT_PANEL_W;
+    int cx = app.grid.cursor_x;
+    int cy = app.grid.cursor_y;
+
+    switch (app.tool) {
+    case TOOL_SELECT:
+        grid_select_none(&app.grid);
+        break;
+    case TOOL_ENTITY:
+        grid_set_entity(&app.grid, cx, cy, -1);
+        break;
+    default:
+        grid_erase(&app.grid, cx, cy);
+        break;
+    }
 }
 
-static void app_handle_key(App *app, const SDL_KeyboardEvent *key)
+static void app_handle_key(const SDL_KeyboardEvent *key)
 {
     switch (key->keysym.sym) {
     case KEY_QUIT:
-        app->running = 0;
+        app.running = 0;
         break;
 
     case KEY_OPEN_SETTINGS:
-        menu_open_settings(&app->menu);
+        menu_open_settings(&app.menu);
         break;
 
     case KEY_PANEL_LEFT:
-        app->left_open = !app->left_open;
-        app_refresh_layout(app);
+        app.left_open = !app.left_open;
+        app_refresh_layout();
         break;
 
     case KEY_PANEL_RIGHT:
-        app->right_open = !app->right_open;
-        app_refresh_layout(app);
+        app.right_open = !app.right_open;
+        app_refresh_layout();
         break;
 
     case KEY_LEFT:
-        grid_move_cursor(&app->grid, &app->layout, -1, 0);
+        grid_move_cursor(&app.grid, &app.layout, -1, 0);
         break;
     case KEY_RIGHT:
-        grid_move_cursor(&app->grid, &app->layout, 1, 0);
+        grid_move_cursor(&app.grid, &app.layout, 1, 0);
         break;
     case KEY_UP:
-        grid_move_cursor(&app->grid, &app->layout, 0, -1);
+        grid_move_cursor(&app.grid, &app.layout, 0, -1);
         break;
     case KEY_DOWN:
-        grid_move_cursor(&app->grid, &app->layout, 0, 1);
+        grid_move_cursor(&app.grid, &app.layout, 0, 1);
         break;
 
     case KEY_CONFIRM:
-        app_place(app, CELL_SOLID);
+        app_primary_action();
         break;
     case KEY_CANCEL:
-        app_place(app, CELL_EMPTY);
+        app_secondary_action();
         break;
 
     case KEY_TOOL_1:
-        app->tool = 0;
+        app_select_tool(TOOL_SELECT);
         break;
     case KEY_TOOL_2:
-        app->tool = 1;
+        app_select_tool(TOOL_BLOCK);
         break;
     case KEY_TOOL_3:
-        app->tool = 2;
+        app_select_tool(TOOL_ENTITY);
         break;
     case KEY_TOOL_4:
-        app->tool = 3;
+        app_select_tool(TOOL_TEXTURE);
         break;
     case KEY_TOOL_NEXT:
-        app->tool = (app->tool + 1) % PANEL_BUTTONS;
+        app_select_tool((app.tool + 1) % PANEL_BUTTONS);
         break;
 
     default:
@@ -163,63 +264,99 @@ static void app_handle_key(App *app, const SDL_KeyboardEvent *key)
     }
 }
 
-static void app_handle_event(App *app, const SDL_Event *event)
+static void app_handle_picker_result(int result)
+{
+    if (result == PICKER_EVENT_CANCEL) {
+        picker_close(&app.picker);
+        return;
+    }
+    if (result != PICKER_EVENT_CONFIRM) {
+        return;
+    }
+    if (app.picker.kind == PICK_ENTITY) {
+        if (app.picker.count > 0) {
+            app.entity_class = app.picker.index[app.picker.cur];
+        }
+        app.tool = TOOL_ENTITY;
+    } else {
+        if (app.picker.count > 0) {
+            app.current_tex = app.picker.cur;
+        }
+        app.tool = TOOL_BLOCK; /* a picked texture is used right away */
+    }
+    picker_close(&app.picker);
+}
+
+static void app_handle_event(const SDL_Event *event)
 {
     int hit;
 
     if (event->type == SDL_QUIT) {
-        app->running = 0;
+        app.running = 0;
         return;
     }
 
-    /* the modal screens take everything while they are open */
-    if (menu_is_open(&app->menu)) {
-        menu_handle_event(&app->menu, event);
+    /* modal screens take everything while they are open */
+    if (menu_is_open(&app.menu)) {
+        menu_handle_event(&app.menu, event);
+        return;
+    }
+    if (picker_is_open(&app.picker)) {
+        app_handle_picker_result(picker_handle_event(&app.picker, event));
         return;
     }
 
     switch (event->type) {
     case SDL_KEYDOWN:
-        app_handle_key(app, &event->key);
+        app_handle_key(&event->key);
         break;
 
     case SDL_MOUSEMOTION:
-        app->mouse_x = event->motion.x;
-        app->mouse_y = event->motion.y;
-        app_update_mouse(app);
-        app->hover_tool = app_over_left_panel(app)
-                              ? ui_hit_test(app->mouse_x, app->mouse_y)
-                              : -1;
-        app_move_cursor_to_mouse(app);
+        app.mouse_x = event->motion.x;
+        app.mouse_y = event->motion.y;
+        app_update_mouse();
+        app.hover_tool =
+            app_over_left_panel() ? ui_hit_test(app.mouse_x, app.mouse_y) : -1;
+        app_move_cursor_to_mouse();
         /* dragging while a button is held paints continuously */
         if ((event->motion.state & SDL_BUTTON_LMASK) != 0) {
-            app_place(app, CELL_SOLID);
+            if (app.tool == TOOL_BLOCK || app.tool == TOOL_TEXTURE) {
+                app_primary_action();
+            }
         } else if ((event->motion.state & SDL_BUTTON_RMASK) != 0) {
-            app_place(app, CELL_EMPTY);
+            if (app.tool == TOOL_BLOCK || app.tool == TOOL_TEXTURE) {
+                app_secondary_action();
+            }
         }
         break;
 
     case SDL_MOUSEBUTTONDOWN:
-        app->mouse_x = event->button.x;
-        app->mouse_y = event->button.y;
-        app_update_mouse(app);
+        app.mouse_x = event->button.x;
+        app.mouse_y = event->button.y;
+        app_update_mouse();
 
-        if (app_over_left_panel(app)) {
-            hit = ui_hit_test(app->mouse_x, app->mouse_y);
+        if (app_over_left_panel()) {
+            hit = ui_hit_test(app.mouse_x, app.mouse_y);
             if (hit >= 0) {
-                app->tool = hit;
+                app_select_tool(hit);
             }
             break;
         }
-        if (app_over_right_panel(app)) {
+        if (app_over_right_panel()) {
             break; /* properties are read-only for now */
         }
 
-        app_move_cursor_to_mouse(app);
+        app_move_cursor_to_mouse();
         if (event->button.button == SDL_BUTTON_LEFT) {
-            app_place(app, CELL_SOLID);
+            app_primary_action();
         } else if (event->button.button == SDL_BUTTON_RIGHT) {
-            app_place(app, CELL_EMPTY);
+            app_secondary_action();
+        }
+        break;
+
+    case SDL_MOUSEWHEEL:
+        if (app_over_right_panel()) {
+            props_scroll_by(&app.fgd, &app.props, event->wheel.y > 0 ? -1 : 1);
         }
         break;
 
@@ -228,25 +365,25 @@ static void app_handle_event(App *app, const SDL_Event *event)
     }
 }
 
-static void app_render(App *app)
+static void app_render(void)
 {
-    gfx_frame_begin(&app->gfx, COL_BG);
+    gfx_frame_begin(&app.gfx, COL_BG);
 
-    grid_draw(&app->gfx, &app->grid, &app->layout);
-    if (app->left_open) {
-        ui_draw_panel(&app->gfx, app->tool, app->hover_tool);
+    grid_draw(&app.gfx, &app.grid, &app.layout, &app.textures, &app.wad);
+    if (app.left_open) {
+        ui_draw_panel(&app.gfx, app.tool, app.hover_tool);
     }
-    if (app->right_open) {
-        props_draw(&app->gfx, &app->grid, &app->settings);
+    if (app.right_open) {
+        props_draw(&app.gfx, &app.grid, &app.fgd, &app.props);
     }
-    menu_draw(&app->gfx, &app->menu);
+    picker_draw(&app.gfx, &app.picker, &app.fgd, &app.textures, &app.wad);
+    menu_draw(&app.gfx, &app.menu);
 
-    gfx_frame_end(&app->gfx);
+    gfx_frame_end(&app.gfx);
 }
 
 int main(int argc, char *argv[])
 {
-    App app;
     SDL_Window *window;
     SDL_Event event;
     unsigned int frame_start;
@@ -279,6 +416,8 @@ int main(int argc, char *argv[])
     grid_init(&app.grid);
     settings_defaults(&app.settings);
     menu_init(&app.menu, &app.settings);
+    picker_init(&app.picker);
+    props_view_init(&app.props);
 
     app.running = 1;
     app.tool = TOOL_SELECT;
@@ -287,17 +426,29 @@ int main(int argc, char *argv[])
     app.right_open = 1;
     app.mouse_x = 0;
     app.mouse_y = 0;
+    app.current_tex = -1;
+    app.entity_class = -1;
+    app.loaded_wad[0] = '\0';
 
-    app_refresh_layout(&app);
+    if (fgd_load(&app.fgd, NULL)) {
+        SDL_Log("FGD loaded: %d classes", fgd_count(&app.fgd));
+    } else {
+        SDL_Log("FGD not found (%s) - put it next to the executable",
+                FGD_FILE_NAME);
+    }
+
+    app_refresh_layout();
 
     while (app.running) {
         frame_start = SDL_GetTicks();
 
+        app_reload_wad();
+
         while (SDL_PollEvent(&event)) {
-            app_handle_event(&app, &event);
+            app_handle_event(&event);
         }
 
-        app_render(&app);
+        app_render();
 
         /* ~60 fps cap: SDL_Delay keeps the CPU idle (and the PSP happy) */
         frame_time = SDL_GetTicks() - frame_start;
@@ -306,6 +457,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    textures_reset(&app.textures);
     gfx_shutdown(&app.gfx);
     SDL_DestroyWindow(window);
     SDL_Quit();

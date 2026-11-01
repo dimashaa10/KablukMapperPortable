@@ -1,128 +1,176 @@
 /*
  * Kabluk Mapper Portable - props.c
  *
- * Read-only for now: it shows the map rules (block size, floor/ceiling,
- * leak check), the cursor position in cells and Quake units, and where the
- * map will be compiled to. Entity editing will hang off the same panel.
+ * Draws the property list of the class the selection points at:
+ *   - nothing selected -> worldspawn
+ *   - a point entity selected with the SELECT tool -> that class
+ * Values shown are the fgd defaults; per entity values come with the editor
+ * for them (that is the next step).
  */
 #include "props.h"
 
 #include "config.h"
-#include "fs.h"
 
 #define PROPS_X (SCREEN_W - RIGHT_PANEL_W)
 #define PAD 8
-#define ROW_H 12
 #define CONTENT_W (RIGHT_PANEL_W - PAD * 2)
 
-static void props_row(Gfx *g, int y, const char *label, const char *value,
-                      unsigned int value_color)
+#define ROWS_Y 62
+#define ROW_H 11
+#define ROWS_VISIBLE ((SCREEN_H - 26 - ROWS_Y) / ROW_H)
+
+static int props_clamp(int v, int lo, int hi)
 {
-    gfx_text(g, PROPS_X + PAD, y, label, COL_TEXT_DIM, 1);
-    gfx_text_right(g, PROPS_X + RIGHT_PANEL_W - PAD, y, value, value_color, 1);
+    if (v < lo) {
+        return lo;
+    }
+    if (v > hi) {
+        return hi;
+    }
+    return v;
 }
 
-static void props_title(Gfx *g, int y, const char *title)
+/* appends a non negative int to a string, returns the new length */
+static int props_append_int(char *out, int len, int value)
 {
-    gfx_text(g, PROPS_X + PAD, y, title, COL_ACCENT, 1);
-}
-
-static void props_separator(Gfx *g, int y)
-{
-    gfx_rect(g, PROPS_X + PAD, y, CONTENT_W, 1, COL_SEPARATOR);
-}
-
-/* "12:34" without stdio */
-static void props_pair(char *out, int a, int b)
-{
+    char tmp[12];
     int n = 0;
     int i;
-    int digits;
-    int value;
-    int started = 0;
+    int digits = 1;
 
-    for (i = 0; i < 2; i++) {
-        value = (i == 0) ? a : b;
-        if (i == 1) {
-            out[n++] = ':';
-        }
-        if (value < 0) {
-            out[n++] = '-';
-            value = -value;
-        }
-        if (value == 0) {
-            out[n++] = '0';
-            started = 1;
-        }
-        digits = 1;
-        while (digits * 10 <= value && digits < 1000000) {
-            digits *= 10;
-        }
-        while (digits > 0) {
-            if (value / digits != 0) {
-                started = 1;
-            }
-            if (started) {
-                out[n++] = (char)('0' + (value / digits) % 10);
-            }
-            digits /= 10;
-        }
+    if (value == 0) {
+        tmp[n++] = '0';
     }
-    out[n] = '\0';
+    while (digits * 10 <= value && digits < 1000000) {
+        digits *= 10;
+    }
+    while (digits > 0) {
+        tmp[n++] = (char)('0' + (value / digits) % 10);
+        digits /= 10;
+    }
+    for (i = 0; i < n; i++) {
+        out[len++] = tmp[i];
+    }
+    out[len] = '\0';
+    return len;
 }
 
-void props_draw(Gfx *g, const Grid *grid, const Settings *settings)
+void props_view_init(PropsView *view)
 {
+    view->scroll = 0;
+}
+
+void props_scroll_by(Fgd *fgd, PropsView *view, int delta)
+{
+    int max_scroll = fgd->prop_count - ROWS_VISIBLE;
+
+    if (max_scroll < 0) {
+        max_scroll = 0;
+    }
+    view->scroll = props_clamp(view->scroll + delta, 0, max_scroll);
+}
+
+void props_draw(Gfx *g, const Grid *grid, Fgd *fgd, PropsView *view)
+{
+    int class_index;
+    const FgdClass *cls;
+    const char *name;
+    const char *subtitle;
     int y;
-    const char *out_dir;
-    char buf[24];
+    int i;
+    int max_scroll;
 
     gfx_rect(g, PROPS_X, 0, RIGHT_PANEL_W, SCREEN_H, COL_PANEL);
     gfx_rect(g, PROPS_X, 0, 2, SCREEN_H, COL_PANEL_EDGE);
 
-    props_title(g, 10, "MAP");
+    if (!fgd->loaded) {
+        gfx_text(g, PROPS_X + PAD, 12, "NO FGD", COL_WARN, 1);
+        gfx_text(g, PROPS_X + PAD, 28, "PUT Quake.fgd", COL_TEXT_DIM, 1);
+        gfx_text(g, PROPS_X + PAD, 40, "NEXT TO THE EXE", COL_TEXT_DIM, 1);
+        return;
+    }
 
-    y = 26;
-    props_row(g, y, "FLOOR", MAP_DEFAULT_FLOOR ? "ON" : "OFF", COL_OK);
-    y += ROW_H;
-    props_row(g, y, "CEILING", MAP_DEFAULT_CEILING ? "ON" : "OFF", COL_OK);
-    y += ROW_H;
-    props_row(g, y, "LEAK CHK", "ON", COL_OK);
-    y += ROW_H;
-    props_row(g, y, "BLOCK", "128 UNITS", COL_TEXT);
-    y += ROW_H;
-    props_row(g, y, "MAP", "64 X 64", COL_TEXT);
-    y += ROW_H;
+    class_index = grid_selected_class(grid);
+    subtitle = "WORLD";
+    if (class_index < 0) {
+        class_index = fgd_find(fgd, "worldspawn");
+    } else {
+        subtitle = "POINT ENTITY";
+    }
+    if (class_index < 0) {
+        gfx_text(g, PROPS_X + PAD, 12, "NO WORLDSPAWN", COL_WARN, 1);
+        return;
+    }
 
-    props_pair(buf, grid->cursor_x, grid->cursor_y);
-    props_row(g, y, "CURSOR", buf, COL_TEXT);
-    y += ROW_H;
+    if (fgd->props_class != class_index) {
+        fgd_resolve(fgd, class_index);
+        view->scroll = 0;
+    }
 
-    props_pair(buf, grid->cursor_x * BLOCK_UNITS, grid->cursor_y * BLOCK_UNITS);
-    props_row(g, y, "UNITS", buf, COL_TEXT);
+    cls = fgd_class(fgd, class_index);
+    name = cls != NULL ? cls->name : "?";
 
-    y += ROW_H + 6;
-    props_separator(g, y);
+    gfx_text_clip(g, PROPS_X + PAD, 10, CONTENT_W, name, COL_ACCENT, 1);
+    gfx_text(g, PROPS_X + PAD, 22, subtitle, COL_TEXT_DIM, 1);
 
-    y += 10;
-    props_title(g, y, "ENTITY");
-    gfx_text(g, PROPS_X + PAD, y + 14, "NONE SELECTED", COL_TEXT_DIM, 1);
-    gfx_text(g, PROPS_X + PAD, y + 26, "PICK A CELL IN", COL_TEXT_DIM, 1);
-    gfx_text(g, PROPS_X + PAD, y + 38, "THE GRID", COL_TEXT_DIM, 1);
+    /* cell of the selected entity, right under the subtitle */
+    if (grid->sel_x >= 0) {
+        char coord[16];
+        int len = 0;
 
-    y += 54;
-    props_separator(g, y);
+        coord[len++] = 'A';
+        coord[len++] = 'T';
+        coord[len++] = ' ';
+        len = props_append_int(coord, len, grid->sel_x);
+        coord[len++] = ':';
+        coord[len] = '\0';
+        props_append_int(coord, len, grid->sel_y);
+        gfx_text_right(g, PROPS_X + RIGHT_PANEL_W - PAD, 22, coord, COL_TEXT_DIM, 1);
+    }
 
-    y += 10;
-    props_title(g, y, "BUILD");
-    out_dir = settings->out_dir[0] != '\0' ? settings->out_dir : ".";
-    gfx_text(g, PROPS_X + PAD, y + 14, "OUT", COL_TEXT_DIM, 1);
-    gfx_text_clip(g, PROPS_X + PAD, y + 26, CONTENT_W, out_dir, COL_TEXT, 1);
-    gfx_text(g, PROPS_X + PAD, y + 40, "WAD", COL_TEXT_DIM, 1);
-    gfx_text_clip(g, PROPS_X + PAD, y + 52, CONTENT_W,
-                  settings_wad_is_set(settings) ? fs_basename(settings->wad_path)
-                                               : "( NO WAD )",
-                  COL_TEXT, 1);
+    if (cls != NULL && cls->desc[0] != '\0') {
+        gfx_text_clip(g, PROPS_X + PAD, 34, CONTENT_W, cls->desc, COL_TEXT_DIM, 1);
+    }
 
-    gfx_text(g, PROPS_X + PAD, SCREEN_H - 12, "[R] HIDE", COL_TEXT_DIM, 1);
+    gfx_rect(g, PROPS_X + PAD, 46, CONTENT_W, 1, COL_SEPARATOR);
+
+    max_scroll = fgd->prop_count - ROWS_VISIBLE;
+    if (max_scroll < 0) {
+        max_scroll = 0;
+    }
+    view->scroll = props_clamp(view->scroll, 0, max_scroll);
+
+    y = ROWS_Y;
+    for (i = view->scroll; i < fgd->prop_count; i++) {
+        const FgdProp *prop = &fgd->props[i];
+
+        if (y + ROW_H > SCREEN_H - 24) {
+            break;
+        }
+        gfx_text_clip(g, PROPS_X + PAD, y, CONTENT_W - 44, prop->key, COL_TEXT_DIM, 1);
+        if (prop->value[0] != '\0') {
+            gfx_text_right(g, PROPS_X + RIGHT_PANEL_W - PAD, y, prop->value, COL_TEXT, 1);
+        }
+        y += ROW_H;
+    }
+
+    if (fgd->prop_count == 0) {
+        gfx_text(g, PROPS_X + PAD, ROWS_Y, "NO PROPERTIES", COL_TEXT_DIM, 1);
+    }
+
+    /* scroll bar on the right edge of the panel */
+    if (max_scroll > 0) {
+        int track_h = ROWS_VISIBLE * ROW_H;
+        int thumb_h = track_h * ROWS_VISIBLE / fgd->prop_count;
+        int thumb_y;
+
+        if (thumb_h < 8) {
+            thumb_h = 8;
+        }
+        thumb_y = ROWS_Y + (track_h - thumb_h) * view->scroll / max_scroll;
+        gfx_rect(g, PROPS_X + RIGHT_PANEL_W - 3, ROWS_Y, 2, track_h, COL_BTN);
+        gfx_rect(g, PROPS_X + RIGHT_PANEL_W - 3, thumb_y, 2, thumb_h, COL_ACCENT);
+    }
+
+    gfx_text(g, PROPS_X + PAD, SCREEN_H - 14, "[R] HIDE", COL_TEXT_DIM, 1);
 }

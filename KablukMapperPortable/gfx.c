@@ -127,6 +127,46 @@ void gfx_rect_alpha(Gfx *g, int x, int y, int w, int h, unsigned int rgb,
     gfx_set_color(g, COL_BG); /* restore opaque drawing */
 }
 
+SDL_Texture *gfx_texture_from_argb(Gfx *g, const unsigned int *pixels, int w, int h)
+{
+    SDL_Texture *texture;
+
+    if (pixels == NULL || w <= 0 || h <= 0) {
+        return NULL;
+    }
+    texture = SDL_CreateTexture(g->renderer, SDL_PIXELFORMAT_ARGB8888,
+                                SDL_TEXTUREACCESS_STATIC, w, h);
+    if (texture == NULL) {
+        return NULL;
+    }
+    if (SDL_UpdateTexture(texture, NULL, pixels, w * 4) != 0) {
+        SDL_DestroyTexture(texture);
+        return NULL;
+    }
+    return texture;
+}
+
+void gfx_texture_destroy(SDL_Texture *texture)
+{
+    if (texture != NULL) {
+        SDL_DestroyTexture(texture);
+    }
+}
+
+void gfx_blit(Gfx *g, SDL_Texture *texture, int x, int y, int w, int h)
+{
+    SDL_Rect dst;
+
+    if (texture == NULL || w <= 0 || h <= 0) {
+        return;
+    }
+    dst.x = (Sint16)x;
+    dst.y = (Sint16)y;
+    dst.w = (Uint16)w;
+    dst.h = (Uint16)h;
+    SDL_RenderCopy(g->renderer, texture, NULL, &dst);
+}
+
 int gfx_text_width(const char *text, int scale)
 {
     int len = 0;

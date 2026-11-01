@@ -1,30 +1,40 @@
 /*
  * Kabluk Mapper Portable - grid.h
  *
- * The square editor grid: a fixed 64x64 cell map, a cursor, and a camera
- * (the first visible cell). Everything integer, fixed size, no allocation -
- * the PSP has 32 MB of RAM in total.
+ * The square editor grid. One cell is one 128x128x128 unit block and can hold
+ * a texture index and/or a point entity (index into the fgd class table).
  *
- * One cell is one 128x128x128 unit block. The outer ring of the map is the
- * "shell" (floor, ceiling and walls) and is solid from the start, so a map
- * can never be open to the void - the eraser refuses to remove it.
+ * The outer ring of the map is the "shell" (floor, ceiling, walls) and is
+ * solid from the start, so a map can never be open to the void - the eraser
+ * refuses to remove it.
  */
 #ifndef KMP_GRID_H
 #define KMP_GRID_H
 
 #include "config.h"
+#include "fgd.h"
 #include "gfx.h"
 #include "layout.h"
+#include "textures.h"
+#include "wad.h"
 
 #define CELL_EMPTY 0
 #define CELL_SOLID 1
 
+#define TEX_NONE 0xFFFF
+
 typedef struct Grid {
-    unsigned char cells[MAP_ROWS][MAP_COLS];
+    unsigned char solid[MAP_ROWS][MAP_COLS];
+    unsigned short tex[MAP_ROWS][MAP_COLS];   /* texture index from the wad */
+    unsigned char entity[MAP_ROWS][MAP_COLS]; /* fgd class index + 1        */
+
     int cursor_x; /* cell under the cursor, map coords */
     int cursor_y;
     int cam_x;    /* first visible cell, map coords */
     int cam_y;
+
+    int sel_x; /* selected point entity, -1 = nothing selected */
+    int sel_y;
 } Grid;
 
 void grid_init(Grid *grid);
@@ -32,12 +42,23 @@ void grid_clear_map(Grid *grid);   /* empty map + fresh shell */
 void grid_build_shell(Grid *grid); /* solid border ring: floor/ceiling/walls */
 
 int grid_is_shell(int cx, int cy);
-int grid_shell_cells(void);
 
-/* Cell access, coordinates are clamped to the map. Erasing a shell cell is
- * ignored - that is what keeps the map sealed. */
+/* Blocks. Erasing a shell cell is ignored - that is what keeps the map
+ * sealed. */
+void grid_paint(Grid *grid, int cx, int cy, int tex_index);
 void grid_set_cell(Grid *grid, int cx, int cy, unsigned char value);
+void grid_erase(Grid *grid, int cx, int cy);
 unsigned char grid_get_cell(const Grid *grid, int cx, int cy);
+int grid_get_tex(const Grid *grid, int cx, int cy);
+
+/* Point entities: class_index is an fgd class index, -1 removes. */
+void grid_set_entity(Grid *grid, int cx, int cy, int class_index);
+int grid_entity_at(const Grid *grid, int cx, int cy); /* -1 = none */
+
+/* Selection used by the right panel. */
+void grid_select(Grid *grid, int cx, int cy);
+void grid_select_none(Grid *grid);
+int grid_selected_class(const Grid *grid); /* -1 = worldspawn/nothing */
 
 /* Cursor (needs the layout to know how many cells are visible) */
 void grid_move_cursor(Grid *grid, const Layout *layout, int dx, int dy);
@@ -52,6 +73,7 @@ void grid_cell_to_screen(const Grid *grid, int cx, int cy, int *sx, int *sy);
 int grid_screen_to_cell(const Grid *grid, const Layout *layout, int mx, int my,
                         int *cx, int *cy);
 
-void grid_draw(Gfx *g, const Grid *grid, const Layout *layout);
+void grid_draw(Gfx *g, const Grid *grid, const Layout *layout, Textures *textures,
+               const Wad *wad);
 
 #endif /* KMP_GRID_H */

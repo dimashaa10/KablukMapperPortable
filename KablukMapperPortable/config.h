@@ -26,7 +26,7 @@
 /* Panels (both can be folded away: L = left, R = right)               */
 /* ------------------------------------------------------------------ */
 #define PANEL_W 80       /* left tool panel  */
-#define RIGHT_PANEL_W 144 /* right property panel */
+#define RIGHT_PANEL_W 160 /* right property panel (FGD property list) */
 
 #define PANEL_BUTTONS 4
 #define PANEL_BTN_MARGIN 6
@@ -73,6 +73,27 @@
 #define FS_MAX_ENTRIES 96
 #define DEFAULT_OUT_DIR "maps"
 
+/* Entity definitions. The .fgd is loaded from next to the executable
+ * (a copy is put there by the build), then from the repo folders. */
+#define FGD_FILE_NAME "Quake.fgd"
+#define FGD_TEXT_MAX 98304
+
+#define FGD_MAX_CLASSES 220
+#define FGD_MAX_PROPS 48
+#define FGD_MAX_BASES 5
+#define FGD_NAME_LEN 40
+#define FGD_TYPE_LEN 20
+#define FGD_VALUE_LEN 48
+#define FGD_DESC_LEN 110
+
+#define FGD_KIND_POINT 0
+#define FGD_KIND_SOLID 1
+#define FGD_KIND_BASE 2
+
+/* Texture list from the .wad chosen in the editor settings (Quake WAD2) */
+#define WAD_MAX_TEX 512
+#define WAD_NAME_LEN 16
+
 /* ------------------------------------------------------------------ */
 /* Palette (0xRRGGBB) - Quake-ish browns and amber                     */
 /* ------------------------------------------------------------------ */
@@ -95,6 +116,10 @@
 #define COL_TEXT 0xD9C69C
 #define COL_TEXT_DIM 0x8C7452
 #define COL_ACCENT 0xE8A33C
+
+#define COL_ENTITY 0x54C23C
+#define COL_ENTITY_SEL 0xE8D24A
+#define COL_LIST_INFO 0x2E2418
 
 #define COL_FIELD 0x100C08
 #define COL_SEPARATOR 0x3B2F21
