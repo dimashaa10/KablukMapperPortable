@@ -33,7 +33,7 @@
 #define DEFAULT_MINLIGHT 200
 
 /* worldspawn "message": the name the engine shows in the level list */
-#define DEFAULT_MAP_MESSAGE "Kabluk map"
+#define DEFAULT_MAP_MESSAGE ""
 
 #define COMPILE_IDLE 0
 #define COMPILE_RUNNING 1
