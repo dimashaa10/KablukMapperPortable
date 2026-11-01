@@ -22,6 +22,10 @@
 
 #define WINDOW_TITLE "Kabluk Mapper Portable"
 
+/* the two corner credits of the start screen */
+#define APP_AUTHOR "DIMTENCORP"
+#define APP_VERSION "VERSION 0.1"
+
 /* ------------------------------------------------------------------ */
 /* Panels (both can be folded away: L = left, R = right)               */
 /* ------------------------------------------------------------------ */

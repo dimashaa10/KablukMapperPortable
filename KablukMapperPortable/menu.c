@@ -52,11 +52,13 @@
 #define MM_BTN_GAP 10
 #define MM_BTN_X ((SCREEN_W - MM_BTN_W) / 2)
 #define MM_BTN0_Y 108
-#define MM_HINT_Y 234
+#define MM_HINT_Y 232
 #define MM_PANEL_X 40
 #define MM_PANEL_Y 18
 #define MM_PANEL_W (SCREEN_W - 2 * MM_PANEL_X)
-#define MM_PANEL_H 238
+#define MM_PANEL_H 226
+/* the credits sit under the panel, in the two bottom corners of the screen */
+#define MM_FOOT_Y (SCREEN_H - 18)
 
 /* ------------------------------------------------------------------ */
 /* File browser geometry                                               */
@@ -747,6 +749,12 @@ static void draw_main(Gfx *g, const Menu *menu)
     draw_status(g, menu, MM_PANEL_X + 14, MM_HINT_Y - 18, MM_PANEL_W - 28);
     w = gfx_text_width("[UP/DOWN] MOVE   [X] SELECT", 1);
     gfx_text(g, (SCREEN_W - w) / 2, MM_HINT_Y, "[UP/DOWN] MOVE   [X] SELECT",
+             COL_TEXT_DIM, 1);
+
+    /* bottom corners: author on the left, version on the right */
+    gfx_text(g, MM_PANEL_X, MM_FOOT_Y, APP_AUTHOR, COL_TEXT_DIM, 1);
+    w = gfx_text_width(APP_VERSION, 1);
+    gfx_text(g, MM_PANEL_X + MM_PANEL_W - w, MM_FOOT_Y, APP_VERSION,
              COL_TEXT_DIM, 1);
 }
 

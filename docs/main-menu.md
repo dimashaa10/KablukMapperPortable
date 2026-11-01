@@ -14,6 +14,10 @@ up / down (or the mouse) moves the highlight, `X` (cross) takes it:
 `Z` (circle) and `ESC` do nothing here: the start screen is the way out, so the
 only ways back are `CREATE MAP` or `LOAD MAP`.
 
+Under the panel the two corners carry the credits: `DIMTENCORP` on the left,
+`VERSION 0.1` on the right. Both strings live in `config.h` (`APP_AUTHOR`,
+`APP_VERSION`), so bumping the version is a one line change.
+
 `ESC` inside the editor now **returns to the start screen** instead of closing
 the program - that is where `QUIT` lives.
 
