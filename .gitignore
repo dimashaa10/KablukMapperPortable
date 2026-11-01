@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+#.git/
+.vs/
+x64/
+KablukMapperPortable/x64/
+KablukMapperPortable/*.user
