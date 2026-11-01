@@ -158,11 +158,11 @@ include $(PSPSDK_MAKE)/lib/build.mak
 # resources/ (they are game data and are not part of the repository).
 dist: EBOOT.PBP
 	rm -rf dist
-	mkdir -p dist/PSP/GAME/KABLUK/maps
-	cp EBOOT.PBP dist/PSP/GAME/KABLUK/
-	cp ../resources/Quake.fgd dist/PSP/GAME/KABLUK/
+	mkdir -p dist/PSP/GAME/KABLUKMP/maps
+	cp EBOOT.PBP dist/PSP/GAME/KABLUKMP/
+	cp ../resources/Quake.fgd dist/PSP/GAME/KABLUKMP/
 	@for f in ../resources/*.wad ../resources/palette.lmp; do \
-		if [ -f "$$f" ]; then cp "$$f" dist/PSP/GAME/KABLUK/; fi; \
+		if [ -f "$$f" ]; then cp "$$f" dist/PSP/GAME/KABLUKMP/; fi; \
 	done; true
 	@echo ""
 	@echo "copy the contents of dist/ to the root of the memory stick,"
