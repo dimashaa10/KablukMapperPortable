@@ -12,6 +12,10 @@
 #include "fs.h"
 #include "keys.h"
 
+#if KMP_ON_PSP
+#include <unistd.h> /* getcwd: the browser shows absolute paths on the PSP */
+#endif
+
 /* ------------------------------------------------------------------ */
 /* Settings window geometry                                            */
 /* ------------------------------------------------------------------ */
@@ -39,6 +43,11 @@
 #define SET_SAVE_X SET_FIELD_X
 #define SET_CLOSE_W 84
 #define SET_CLOSE_X (SET_X + SET_W - 12 - SET_CLOSE_W)
+/* "MAIN MENU" sits between SAVE and CLOSE */
+#define SET_MAIN_W 104
+#define SET_MAIN_X                                                     \
+    (SET_SAVE_X + SET_SAVE_W +                                         \
+     (SET_CLOSE_X - (SET_SAVE_X + SET_SAVE_W) - SET_MAIN_W) / 2)
 #define SET_HINT_Y (SET_BTN_Y + SET_BTN_H + 6)
 #define SET_STATUS_Y (SET_HINT_Y + 24)
 
@@ -139,6 +148,7 @@ void menu_init(Menu *menu, Settings *settings, const struct CompileJob *job)
     menu->job = job;
     menu->request = MENU_REQUEST_NONE;
     menu->status[0] = '\0';
+    menu->resume_editor = 0;
     menu->sel = MENU_ROW_WAD;
     menu->hover = -1;
     menu->browse_target = BROWSE_WAD;
@@ -217,32 +227,53 @@ static void browse_refresh(Menu *menu)
     menu->hover = -1;
 }
 
+/* On the PSP the editor runs from the EBOOT folder and paths such as the
+ * default "maps" are relative to it. The browser shows the real path, so that
+ * ".. ( UP )" climbs all the way to ms0:/ instead of stopping at ".".
+ * Elsewhere this does nothing: the desktop keeps its relative paths as typed. */
+static void browse_make_absolute(char *path)
+{
+#if KMP_ON_PSP
+    char cwd[PATH_LEN];
+    char tmp[PATH_LEN];
+
+    if (path == NULL || path[0] == '\0') {
+        return;
+    }
+    if (fs_is_absolute(path)) {
+        return;
+    }
+    if (getcwd(cwd, (size_t)sizeof(cwd)) == NULL) {
+        fs_copy(path, PATH_LEN, BROWSER_ROOT);
+        return;
+    }
+    fs_join(tmp, PATH_LEN, cwd, path);
+    fs_copy(path, PATH_LEN, tmp);
+#else
+    (void)path;
+#endif
+}
+
 static void browse_open(Menu *menu, int target)
 {
     menu->browse_target = target;
     menu->return_mode = MENU_SETTINGS;
     menu->mode = MENU_BROWSE;
 
-    if (target == BROWSE_WAD) {
-        if (menu->settings->wad_path[0] != '\0') {
-            fs_copy(menu->path, PATH_LEN, menu->settings->wad_path);
-            fs_parent(menu->path, PATH_LEN);
-        } else {
-            fs_copy(menu->path, PATH_LEN, ".");
-        }
-    } else if (target == BROWSE_MAP) {
-        if (menu->settings->out_dir[0] != '\0') {
-            fs_copy(menu->path, PATH_LEN, menu->settings->out_dir);
-        } else {
-            fs_copy(menu->path, PATH_LEN, ".");
-        }
+    if (target == BROWSE_WAD && menu->settings->wad_path[0] != '\0') {
+        fs_copy(menu->path, PATH_LEN, menu->settings->wad_path);
+        fs_parent(menu->path, PATH_LEN);
+    } else if (target != BROWSE_WAD && menu->settings->out_dir[0] != '\0' &&
+               fs_is_dir(menu->settings->out_dir)) {
+        /* where the maps were put the last time, while that is still there */
+        fs_copy(menu->path, PATH_LEN, menu->settings->out_dir);
+    } else if (target == BROWSE_DIR) {
+        /* the compile folder starts on the root of the memory stick */
+        fs_copy(menu->path, PATH_LEN, BROWSER_ROOT);
     } else {
-        if (menu->settings->out_dir[0] != '\0') {
-            fs_copy(menu->path, PATH_LEN, menu->settings->out_dir);
-        } else {
-            fs_copy(menu->path, PATH_LEN, ".");
-        }
+        fs_copy(menu->path, PATH_LEN, ".");
     }
+    browse_make_absolute(menu->path);
     browse_refresh(menu);
 }
 
@@ -343,6 +374,9 @@ static int settings_hit(int mx, int my)
     if (menu_in_rect(mx, my, SET_SAVE_X, SET_BTN_Y, SET_SAVE_W, SET_BTN_H)) {
         return MENU_ROW_SAVE;
     }
+    if (menu_in_rect(mx, my, SET_MAIN_X, SET_BTN_Y, SET_MAIN_W, SET_BTN_H)) {
+        return MENU_ROW_MAIN;
+    }
     if (menu_in_rect(mx, my, SET_CLOSE_X, SET_BTN_Y, SET_CLOSE_W, SET_BTN_H)) {
         return MENU_ROW_CLOSE;
     }
@@ -414,6 +448,9 @@ static void settings_activate(Menu *menu, int row)
         break;
     case MENU_ROW_SAVE:
         menu->request = MENU_REQUEST_SAVE;
+        break;
+    case MENU_ROW_MAIN:
+        menu->request = MENU_REQUEST_MAIN;
         break;
     default:
         menu_close(menu);
@@ -543,7 +580,12 @@ int menu_handle_event(Menu *menu, const SDL_Event *event)
             return 1;
         case KEY_CANCEL:
             if (menu->mode == MENU_MAIN) {
-                return 1; /* the menu is the way out, Z does nothing here */
+                /* opened from the editor: the way back to the map. A fresh
+                 * start has nothing to go back to, so Z does nothing there. */
+                if (menu->resume_editor) {
+                    menu_close(menu);
+                }
+                return 1;
             }
             if (menu->mode == MENU_BROWSE) {
                 menu->mode = menu->return_mode;
@@ -675,6 +717,7 @@ static void draw_status(Gfx *g, const Menu *menu, int x, int y, int w)
 static void draw_settings(Gfx *g, const Menu *menu)
 {
     int close_hover;
+    int main_hover;
     int save_hover;
 
     gfx_rect(g, SET_X, SET_Y, SET_W, SET_H, COL_PANEL);
@@ -705,6 +748,9 @@ static void draw_settings(Gfx *g, const Menu *menu)
     save_hover = (menu->sel == MENU_ROW_SAVE) || (menu->hover == MENU_ROW_SAVE);
     draw_button(g, SET_SAVE_X, SET_BTN_Y, SET_SAVE_W, SET_BTN_H, "SAVE .MAP",
                 save_hover);
+    main_hover = (menu->sel == MENU_ROW_MAIN) || (menu->hover == MENU_ROW_MAIN);
+    draw_button(g, SET_MAIN_X, SET_BTN_Y, SET_MAIN_W, SET_BTN_H, "MAIN MENU",
+                main_hover);
     close_hover = (menu->sel == MENU_ROW_CLOSE) || (menu->hover == MENU_ROW_CLOSE);
     draw_button(g, SET_CLOSE_X, SET_BTN_Y, SET_CLOSE_W, SET_BTN_H, "CLOSE",
                 close_hover);
@@ -721,6 +767,7 @@ static void draw_main(Gfx *g, const Menu *menu)
 {
     static const char *title = "KABLUK MAPPER PORTABLE";
     static const char *subtitle = "QUAKE MAP EDITOR";
+    const char *hint;
     int w;
     int i;
 
@@ -747,9 +794,10 @@ static void draw_main(Gfx *g, const Menu *menu)
     }
 
     draw_status(g, menu, MM_PANEL_X + 14, MM_HINT_Y - 18, MM_PANEL_W - 28);
-    w = gfx_text_width("[UP/DOWN] MOVE   [X] SELECT", 1);
-    gfx_text(g, (SCREEN_W - w) / 2, MM_HINT_Y, "[UP/DOWN] MOVE   [X] SELECT",
-             COL_TEXT_DIM, 1);
+    hint = menu->resume_editor ? "[X] SELECT   [O] BACK TO THE MAP"
+                               : "[UP/DOWN] MOVE   [X] SELECT";
+    w = gfx_text_width(hint, 1);
+    gfx_text(g, (SCREEN_W - w) / 2, MM_HINT_Y, hint, COL_TEXT_DIM, 1);
 
     /* bottom corners: author on the left, version on the right */
     gfx_text(g, MM_PANEL_X, MM_FOOT_Y, APP_AUTHOR, COL_TEXT_DIM, 1);

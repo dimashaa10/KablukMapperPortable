@@ -38,8 +38,9 @@
 #define MENU_ROW_FLOOR 3
 #define MENU_ROW_CEILING 4
 #define MENU_ROW_SAVE 5
-#define MENU_ROW_CLOSE 6
-#define MENU_ROW_COUNT 7
+#define MENU_ROW_MAIN 6  /* back to the start screen, the map stays loaded */
+#define MENU_ROW_CLOSE 7
+#define MENU_ROW_COUNT 8
 
 /* what the menu wants main.c to do next */
 #define MENU_REQUEST_NONE 0
@@ -51,6 +52,7 @@
 #define MENU_REQUEST_NEW_MAP 6 /* start an empty map */
 #define MENU_REQUEST_LOAD_MAP 7/* load menu.picked */
 #define MENU_REQUEST_QUIT 8    /* leave the editor */
+#define MENU_REQUEST_MAIN 9    /* show the start screen */
 
 #define BROWSE_WAD 0
 #define BROWSE_DIR 1
@@ -70,6 +72,9 @@ typedef struct Menu {
 
     int sel;   /* highlighted row in the settings window */
     int hover; /* mouse hover (-1 = none)                  */
+    /* 1 while a map is on screen: the start screen then offers circle/Z to
+     * come back to it instead of being the only way out */
+    int resume_editor;
 
     int browse_target; /* BROWSE_WAD / BROWSE_DIR */
     int return_mode;   /* where the browser goes back to: MENU_SETTINGS or MENU_CLOSED */

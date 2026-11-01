@@ -29,6 +29,73 @@ static int fs_is_sep(char c)
     return c == '/' || c == '\\';
 }
 
+static int fs_is_name_char(char c)
+{
+    int v = (unsigned char)c;
+
+    return (v >= 'a' && v <= 'z') || (v >= 'A' && v <= 'Z') ||
+           (v >= '0' && v <= '9');
+}
+
+/* A device root such as the PSP's "ms0:/" (also "ef0:", "flash0:/"): it has no
+ * parent, so the browser must not walk out of it. Two or more letters/digits
+ * followed by ':' and at most one separator. A lone "C:" is left alone here -
+ * it is a Windows drive, handled by the _WIN32 code in fs_parent(). */
+static int fs_is_dev_root(const char *path)
+{
+    int i = 0;
+
+    if (path == NULL) {
+        return 0;
+    }
+    while (path[i] != '\0' && path[i] != ':') {
+        if (!fs_is_name_char(path[i])) {
+            return 0;
+        }
+        i++;
+    }
+    if (i < 2 || path[i] != ':') {
+        return 0;
+    }
+    i++;
+    if (path[i] == '\0') {
+        return 1; /* "ms0:" */
+    }
+    return fs_is_sep(path[i]) && path[i + 1] == '\0'; /* "ms0:/" */
+}
+
+/* 1 for "/x", "ms0:/x", "C:\\x" - anything that does not need the cwd. */
+int fs_is_absolute(const char *path)
+{
+    int i = 0;
+
+    if (path == NULL || path[0] == '\0') {
+        return 0;
+    }
+    if (fs_is_sep(path[0])) {
+        return 1;
+    }
+    /* a device or drive name: "C:\\x", "ms0:/x" */
+    while (i < 8 && path[i] != '\0' && path[i] != ':') {
+        if (!fs_is_name_char(path[i])) {
+            return 0;
+        }
+        i++;
+    }
+    return path[i] == ':';
+}
+
+/* Keeps the separator a device root ends with, so joins read "ms0:/x". */
+static void fs_keep_sep(char *path)
+{
+    int len = (int)strlen(path);
+
+    if (len > 0 && !fs_is_sep(path[len - 1]) && len + 1 < PATH_LEN) {
+        path[len] = FS_SEP;
+        path[len + 1] = '\0';
+    }
+}
+
 int fs_mkdir(const char *path)
 {
     if (path == NULL || path[0] == '\0') {
@@ -45,6 +112,36 @@ int fs_mkdir(const char *path)
         return 1;
     }
     return errno == EEXIST;
+#endif
+}
+
+/* 1 when the path is a folder that is there right now. The browser uses it to
+ * fall back to the root when the remembered folder has been deleted. */
+int fs_is_dir(const char *path)
+{
+    if (path == NULL || path[0] == '\0') {
+        return 0;
+    }
+#ifdef _WIN32
+    {
+        struct _finddata_t data;
+        intptr_t handle = _findfirst(path, &data);
+
+        if (handle == -1) {
+            return 0;
+        }
+        _findclose(handle);
+        return (data.attrib & _A_SUBDIR) != 0;
+    }
+#else
+    {
+        struct stat st;
+
+        if (stat(path, &st) != 0) {
+            return 0;
+        }
+        return S_ISDIR(st.st_mode) ? 1 : 0;
+    }
 #endif
 }
 
@@ -163,6 +260,11 @@ void fs_parent(char *path, int cap)
         fs_copy(path, cap, tmp);
         return;
     }
+    if (fs_is_dev_root(tmp)) { /* "ms0:", "ms0:/" - nothing above it */
+        fs_keep_sep(tmp);
+        fs_copy(path, cap, tmp);
+        return;
+    }
 #ifdef _WIN32
     if (len == 3 && tmp[1] == ':' && fs_is_sep(tmp[2])) { /* "C:\" */
         fs_copy(path, cap, tmp);
@@ -198,6 +300,9 @@ void fs_parent(char *path, int cap)
     }
 #endif
     tmp[cut] = '\0';
+    if (fs_is_dev_root(tmp)) { /* "ms0:/PSP" -> "ms0:/" */
+        fs_keep_sep(tmp);
+    }
     fs_copy(path, cap, tmp);
 }
 

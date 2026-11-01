@@ -11,9 +11,12 @@
  *   circle (B)     -> KEY_CANCEL   ("Z")
  *   square (X)     -> left mouse click at the pointer (tool buttons, rows)
  *   triangle (Y)   -> KEY_PROP_FOCUS (open the property panel)
- *   L / R          -> fold the left / right panel
+ *   L / R          -> previous / next tool of the left panel
  *   SELECT         -> editor settings
  *   START          -> compile window
+ *
+ * Choosing a tool must not depend on the pointer: on a worn PSP the nub is
+ * often the first thing to fail, and R alone then cycles through all four.
  *
  * Only the D-pad repeats; a repeating "confirm" would fire the same action
  * again and again while the button is held.
@@ -66,8 +69,8 @@ static const PadKey pad_keys[] = {
     { SDL_CONTROLLER_BUTTON_A, KEY_CONFIRM, 0 },
     { SDL_CONTROLLER_BUTTON_B, KEY_CANCEL, 0 },
     { SDL_CONTROLLER_BUTTON_Y, KEY_PROP_FOCUS, 0 },
-    { SDL_CONTROLLER_BUTTON_LEFTSHOULDER, KEY_PANEL_LEFT, 0 },
-    { SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, KEY_PANEL_RIGHT, 0 },
+    { SDL_CONTROLLER_BUTTON_LEFTSHOULDER, KEY_TOOL_PREV, 0 },
+    { SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, KEY_TOOL_NEXT, 0 },
     { SDL_CONTROLLER_BUTTON_BACK, KEY_OPEN_SETTINGS, 0 },
     { SDL_CONTROLLER_BUTTON_START, KEY_OPEN_COMPILE, 0 }
 };
@@ -127,6 +130,8 @@ static void input_open(Input *input)
         }
         name = SDL_GameControllerName(input->pad);
         SDL_Log("pad: %s", name != NULL ? name : "game controller");
+        input->psp_pad = name != NULL && strcmp(name, PSP_PAD_NAME) == 0;
+        input->centre_taken = 0; /* the nub is sampled when it is first read */
         return;
     }
 }
@@ -201,6 +206,37 @@ static int push_click(SDL_Event *event, int x, int y)
     return 1;
 }
 
+/* One axis of the nub, relative to its rest position, kept in range. */
+static Sint16 input_centred(int value)
+{
+    if (value < -32768) {
+        value = -32768;
+    }
+    if (value > 32767) {
+        value = 32767;
+    }
+    return (Sint16)value;
+}
+
+/* The two nub axes. On the PSP they are read straight from the joystick: it
+ * is the only one there, its first two axes are the nub, and that skips the
+ * controller mapping - a mapping that is wrong about the Y axis is exactly
+ * what makes a nub move one way only. */
+static void input_read_nub(Input *input, Sint16 *ax, Sint16 *ay)
+{
+    if (input->psp_pad) {
+        SDL_Joystick *joy = SDL_GameControllerGetJoystick(input->pad);
+
+        if (joy != NULL && SDL_JoystickNumAxes(joy) >= 2) {
+            *ax = SDL_JoystickGetAxis(joy, 0);
+            *ay = SDL_JoystickGetAxis(joy, 1);
+            return;
+        }
+    }
+    *ax = SDL_GameControllerGetAxis(input->pad, SDL_CONTROLLER_AXIS_LEFTX);
+    *ay = SDL_GameControllerGetAxis(input->pad, SDL_CONTROLLER_AXIS_LEFTY);
+}
+
 int input_pump(Input *input, SDL_Event *events, int max)
 {
     Uint32 now;
@@ -251,10 +287,22 @@ int input_pump(Input *input, SDL_Event *events, int max)
     /* the nub moves the pointer; the D-pad keeps stepping the grid cursor,
      * so the two never fight each other */
     {
-        Sint16 ax = SDL_GameControllerGetAxis(input->pad,
-                                              SDL_CONTROLLER_AXIS_LEFTX);
-        Sint16 ay = SDL_GameControllerGetAxis(input->pad,
-                                              SDL_CONTROLLER_AXIS_LEFTY);
+        Sint16 ax;
+        Sint16 ay;
+
+        input_read_nub(input, &ax, &ay);
+
+        /* A worn nub does not rest at 0: if its Y axis sits off centre, the
+         * pointer is pinned to the top or the bottom edge and only slides
+         * sideways. So the position it has when the pad opens is the middle,
+         * and every reading is measured from there. */
+        if (!input->centre_taken) {
+            input->centre_x = ax;
+            input->centre_y = ay;
+            input->centre_taken = 1;
+        }
+        ax = input_centred(ax - (int)input->centre_x);
+        ay = input_centred(ay - (int)input->centre_y);
 
         if (ax > -INPUT_DEADZONE && ax < INPUT_DEADZONE) {
             ax = 0;

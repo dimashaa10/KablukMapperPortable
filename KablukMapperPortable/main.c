@@ -20,14 +20,18 @@
  *   ENTITY   - pops the point entity list, then click places one
  *   TEXTURE  - pops the texture list of the selected wad
  *
- * Controls (desktop now, PSP buttons later - see keys.h):
+ * Controls (desktop now, PSP buttons too - see keys.h and input.c):
  *   mouse / d-pad     move the grid cursor
  *   X / Z             confirm / cancel (cross / circle on the PSP)
- *   1..4 / TAB        pick a tool
- *   Q / E             fold the left / right panel (PSP: L / R)
+ *   1..4 / TAB / R    pick a tool, next / previous (PSP: R / L)
+ *   Q / E             fold the left / right panel (desktop only)
  *   ENTER             editor settings (PSP: SELECT)
  *   F2                compile map window (PSP: START)
  *   ESC               back to the start screen (QUIT is there)
+ *
+ * The start screen is not the only way out: the settings window has a
+ * MAIN MENU button, and circle / Z on the start screen goes back to the map
+ * that was being edited, so opening it never costs the work.
  */
 #include <SDL.h>
 #include <stdio.h>
@@ -293,6 +297,7 @@ static void app_new_map(void)
     app_seed_defaults();
     app.panel_focus = 0;
     app.tool = TOOL_SELECT;
+    app.menu.resume_editor = 1;
     menu_close(&app.menu);
 }
 
@@ -335,6 +340,7 @@ static void app_load_map(const char *path)
     fs_copy(app.settings.out_dir, PATH_LEN, path);
     fs_parent(app.settings.out_dir, PATH_LEN);
 
+    app.menu.resume_editor = 1;
     menu_close(&app.menu);
     SDL_Log("map loaded: %d brushes, %d cells, %d entities, %d textures missing",
             info.brushes, info.cells, info.entities, info.tex_missing);
@@ -408,6 +414,12 @@ static void app_handle_menu_request(void)
         break;
     case MENU_REQUEST_LOAD_MAP:
         app_load_map(app.menu.picked);
+        break;
+    case MENU_REQUEST_MAIN:
+        /* the settings window asks for the start screen; the map stays as it
+         * is, and circle/Z on that screen comes back to it */
+        menu_open_main(&app.menu);
+        app.menu.resume_editor = 1;
         break;
     case MENU_REQUEST_QUIT:
         app_quit();
@@ -637,6 +649,9 @@ static void app_handle_key(const SDL_KeyboardEvent *key)
         break;
     case KEY_TOOL_NEXT:
         app_select_tool((app.tool + 1) % PANEL_BUTTONS);
+        break;
+    case KEY_TOOL_PREV:
+        app_select_tool((app.tool + PANEL_BUTTONS - 1) % PANEL_BUTTONS);
         break;
 
     default:

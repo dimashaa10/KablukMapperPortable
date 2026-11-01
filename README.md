@@ -64,14 +64,22 @@ the pad controls and the limits of the PSP renderer - is in
 | `X` | cross | confirm / pick / press |
 | `Z`, `ESC` | circle | cancel, and leave the editor for the start screen |
 | mouse | nub + `□` | pointer, and the click at that point |
-| `Q` / `E` | `L` / `R` | fold the tool / property panel |
+| `Q` / `E` | - | fold the tool / property panel |
+| `TAB` / `R` | `R` / `L` | next / previous tool of the left panel |
 | `F` | triangle | jump into the property panel |
 | `ENTER` | `SELECT` | settings |
 | `F2` | `START` | compile window |
 | `N` | - | new folder in the file browser |
 
 `ESC` never closes the program: the start screen with `CREATE MAP` /
-`LOAD MAP` / `QUIT` is the way in and out.
+`LOAD MAP` / `QUIT` is the way in and out. On the PSP the settings window has
+a `MAIN MENU` button for that, and circle on the start screen comes back to
+the map that was being edited.
+
+`sh tests/run.sh` builds and runs the host tests: they compile the real
+`menu.c`, `fs.c`, `settings.c` and `input.c` against the SDL2 headers in the
+repository and check the settings rows, the browser paths (desktop and
+`ms0:/`) and the pad translation, with no window and no SDL2 library needed.
 
 ## Documentation
 

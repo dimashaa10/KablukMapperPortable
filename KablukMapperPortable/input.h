@@ -27,6 +27,12 @@ typedef struct Input {
     unsigned char held[INPUT_MAX_KEYS]; /* button state of the last frame */
     Uint32 next_at[INPUT_MAX_KEYS];     /* auto repeat for the D-pad      */
     unsigned char click_held;           /* square = click                 */
+    int psp_pad;                        /* the pad is the PSP's own nub   */
+
+    /* where the nub rests; taken from the first reading after it opens */
+    Sint16 centre_x;
+    Sint16 centre_y;
+    int centre_taken;
 
     float pointer_x; /* the pad pointer, in screen pixels */
     float pointer_y;

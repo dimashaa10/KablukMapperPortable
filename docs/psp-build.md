@@ -144,7 +144,7 @@ desktop version receives. Every other file is unchanged.
 | `O` (circle) | back / cancel |
 | `□` (square) | left click where the pointer is - this is how a block gets a tool or a texture gets picked |
 | `△` (triangle) | jump to the property panel |
-| `L` / `R` | previous / next panel |
+| `L` / `R` | previous / next **tool** (`SELECT`, `BLOCK`, `ENTITY`, `TEXTURE`) |
 | `SELECT` | settings window |
 | `START` | compile window |
 
@@ -159,11 +159,31 @@ and **square** is the mouse. Moving the nub slides a pointer over the screen
 and pressing square acts at that spot, which is what the block palette, the
 texture picker and the property rows expect.
 
+**`R` alone switches tools.** The tool palette is a column of buttons on the
+left edge, which is a long way from the middle of the screen for a nub - and
+on a well used handheld the nub is the first thing to wear out. `R` steps to
+the next tool and `L` back to the previous one, wrapping around, so a whole
+map can be built without ever pointing at the palette. The nub is still there
+for the finer things (a property row, a texture in the list).
+
+The nub is also re-centred every time the pad is opened: the editor remembers
+where the stick rests and measures from there, so a nub that sits off centre
+(and would otherwise pin the pointer to one edge, moving it sideways only)
+still moves it in both directions.
+
 Text fields (the map name, a property value) are typed with the built-in
 on-screen keyboard: D-pad moves over the letters, cross types, circle closes.
 
-There is no `ESC` on the handheld: the start screen's `QUIT` returns to the
-XMB, and `ESC` / circle leaves the editor back to the start screen.
+There is no `ESC` on the handheld, so the start screen is reached from the
+settings window: `MAIN MENU`, next to `SAVE .MAP` and `CLOSE`, is the button
+that shows it. `QUIT` there returns to the XMB, and circle on the start screen
+goes back to the map that was being edited (the map is never thrown away by
+opening the start screen). On the desktop `ESC` still does the same thing.
+
+The folder browser starts on `ms0:/` - the root of the memory stick - when no
+output folder has been picked yet, and it walks up to `ms0:/` and stops there
+otherwise, so any folder on the card can be reached even though the editor
+runs from `ms0:/PSP/GAME/KABLUK` and its own paths are relative to that.
 
 ## Notes and limits
 

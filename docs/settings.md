@@ -14,6 +14,7 @@ shows what it will do on its right edge: `BROWSE`, `TYPE`, `PICK`.
 | `FLOOR TEXTURE` | texture of the floor slab the exporter writes |
 | `CEILING TEXTURE` | texture of the ceiling slab |
 | `SAVE .MAP` | writes **only** the `.map` source to that folder |
+| `MAIN MENU` | shows the start screen; the map stays loaded, circle goes back to it |
 | `CLOSE` | back to the editor |
 
 ## The map name and the folder
@@ -57,6 +58,14 @@ the new folder can be entered or picked as the output folder immediately.
 The browser is used for three things: the `.wad`, the output folder
 (`( USE THIS FOLDER )` confirms the folder you are in) and nothing else — it
 never deletes or renames anything.
+
+On the PSP the output folder browser starts on `ms0:/`, the root of the
+memory stick: the editor itself runs from `ms0:/PSP/GAME/KABLUK` and every
+relative path in the settings lives there, but `.. ( UP )` climbs out of the
+EBOOT folder, all the way to `ms0:/`, where it stops. Once a folder has been
+picked it is opened again next time, and `( USE THIS FOLDER )` stores its full
+path (`ms0:/PSP/GAME/MYMAPS`), so a card can be laid out the way its owner
+wants instead of being tied to the EBOOT folder.
 
 ## What is written into the `.map`
 

@@ -29,6 +29,9 @@ typedef struct FsEntry {
  * Returns the number of entries written. */
 int fs_list_dir(const char *path, const char *ext, FsEntry *out, int max);
 
+/* 1 when the path is a folder that exists right now. */
+int fs_is_dir(const char *path);
+
 /* Creates one directory. Returns 1 when it exists afterwards, 0 on error. */
 int fs_mkdir(const char *path);
 
@@ -38,6 +41,8 @@ int fs_mkdir(const char *path);
 void fs_sanitize_name(char *dst, int cap, const char *src);
 
 void fs_copy(char *dst, int cap, const char *src);
+/* 1 when the path stands on its own ("/x", "ms0:/x", "C:\x"). */
+int fs_is_absolute(const char *path);
 void fs_join(char *out, int cap, const char *base, const char *name);
 void fs_parent(char *path, int cap);
 const char *fs_basename(const char *path);

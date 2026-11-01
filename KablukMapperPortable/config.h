@@ -22,9 +22,26 @@
 
 #define WINDOW_TITLE "Kabluk Mapper Portable"
 
+/* 1 when this build targets the PSP. Both the makefile flag and the compiler
+ * define are honoured, so a hand build with just -D__PSP__ also counts. */
+#if defined(__PSP__) || defined(KMP_HAVE_PSP)
+#define KMP_ON_PSP 1
+#else
+#define KMP_ON_PSP 0
+#endif
+
 /* Where the EBOOT and its files live on the memory stick. The PSP build
  * chdir()s here when the loader does not tell it the EBOOT's own folder. */
 #define DEFAULT_PSP_DIR "ms0:/PSP/GAME/KABLUK"
+
+/* Where the file browser starts when nothing has been picked yet. On the PSP
+ * that is the root of the memory stick, so every folder on it can be reached
+ * by walking down; on the desktop the folder the editor runs from. */
+#if KMP_ON_PSP
+#define BROWSER_ROOT "ms0:/"
+#else
+#define BROWSER_ROOT "."
+#endif
 
 /* the two corner credits of the start screen */
 #define APP_AUTHOR "DIMTENCORP"

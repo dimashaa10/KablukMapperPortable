@@ -11,15 +11,22 @@ up / down (or the mouse) moves the highlight, `X` (cross) takes it:
 | `LOAD MAP` | opens the file browser filtered to `.map`, and loads the file that is picked |
 | `QUIT` | back to the XMB on the PSP, the window closes on Windows |
 
-`Z` (circle) and `ESC` do nothing here: the start screen is the way out, so the
-only ways back are `CREATE MAP` or `LOAD MAP`.
+`Z` (circle) goes back to the map that was being edited, when the start
+screen was opened from the editor (the `MAIN MENU` button in the settings, or
+`ESC`). Nothing is thrown away: create, load and save all keep working the
+same, the map is still there when the screen closes.
+
+On a fresh start there is nothing to go back to, so `Z` does nothing there and
+the only ways forward are `CREATE MAP` or `LOAD MAP`.
 
 Under the panel the two corners carry the credits: `DIMTENCORP` on the left,
 `VERSION 0.1` on the right. Both strings live in `config.h` (`APP_AUTHOR`,
 `APP_VERSION`), so bumping the version is a one line change.
 
 `ESC` inside the editor now **returns to the start screen** instead of closing
-the program - that is where `QUIT` lives.
+the program - that is where `QUIT` lives. On the PSP, where there is no `ESC`,
+the `MAIN MENU` button of the settings window does the same, and circle brings
+the map back.
 
 ## Loading a `.map`
 
