@@ -22,14 +22,34 @@ EXTRA_TARGETS = EBOOT.PBP
 PSP_EBOOT_ICON = ../psp/ICON0.PNG
 PSP_EBOOT_PIC1 = ../psp/PIC1.PNG
 
-PSPSDK := $(shell psp-config --pspsdk-path)
+# ---------------------------------------------------------------------------
+# Where the SDK lives.
+#
+# "psp-config --pspsdk-path" is the usual answer, but on Windows it can hand
+# back a path that make cannot open: a native Windows psp-config drops the
+# drive letter, so C:/pspdev/psp/sdk arrives as /pspdev/psp/sdk and the include
+# below fails with "No such file or directory". So try the places in order and
+# keep the first one that really has a build.mak. Override with
+#   make PSPDEV=/c/pspdev          or      make PSPSDK=/c/pspdev/psp/sdk
+# ---------------------------------------------------------------------------
+SDK_TRIES = $(if $(PSPDEV),$(PSPDEV)/psp/sdk) \
+            $(shell psp-config --pspsdk-path 2>/dev/null) \
+            $(shell psp-config --psp-prefix 2>/dev/null)/sdk \
+            /c/pspdev/psp/sdk /c/dev/pspdev/psp/sdk \
+            /usr/local/pspdev/psp/sdk /opt/pspdev/psp/sdk
+
+PSPSDK := $(firstword $(foreach dir,$(SDK_TRIES),\
+              $(if $(wildcard $(dir)/lib/build.mak),$(dir))))
+
 ifeq ($(PSPSDK),)
-$(error psp-config not found - run make from the pspdev shell, see docs/psp-build.md)
+$(info pspsdk not found; looked for lib/build.mak in:)
+$(info    $(SDK_TRIES))
+$(error set PSPDEV, e.g. "make PSPDEV=/c/pspdev" - see docs/psp-build.md)
 endif
 
-# build.mak needs PSPDEV; derive it from psp-config when it is not exported
-ifeq ($(PSPDEV),)
-PSPDEV := $(patsubst %/psp,%,$(shell psp-config --psp-prefix))
+# build.mak needs PSPDEV too; take it from the SDK when it is not usable as is
+ifeq ($(wildcard $(PSPDEV)/psp/include/SDL2/SDL.h),)
+PSPDEV := $(patsubst %/psp/sdk,%,$(PSPSDK))
 endif
 
 OBJS = main.o input.o gfx.o grid.o ui.o font.o layout.o props.o settings.o \

@@ -46,9 +46,19 @@ cd C:\path\to\KablukMapperPortable
 make
 ```
 
-The Makefile reads the SDK path from `psp-config --pspsdk-path` and stops with
-a message when `psp-config` is not on `PATH`, so a wrong shell cannot produce a
-half built `EBOOT.PBP`.
+The Makefile finds the SDK itself instead of trusting `psp-config` blindly: it
+tries `$PSPDEV/psp/sdk` first, then `psp-config --pspsdk-path`, then
+`/c/pspdev/psp/sdk`, and keeps the first one that really contains
+`lib/build.mak`. If none of them do, it says which paths it looked at and
+stops, so a wrong shell cannot produce a half built `EBOOT.PBP`.
+
+Either path can also be given on the command line, which is the shortest way
+out of any doubt about where the toolchain is:
+
+```sh
+make PSPDEV=/c/pspdev
+make PSPSDK=/c/pspdev/psp/sdk
+```
 
 ### What the Makefile sets up
 
@@ -156,6 +166,7 @@ XMB, and `ESC` / circle leaves the editor back to the start screen.
 | what you see | what it means |
 | --- | --- |
 | `psp-config: command not found` | `PATH` / `PSPDEV` is not set in this shell - see Build |
+| `/pspdev/psp/sdk/lib/build.mak: No such file or directory` | the Windows `psp-config` dropped the `C:` of `C:\pspdev`; say where it is: `make PSPDEV=/c/pspdev` (the Makefile also tries `/c/pspdev/psp/sdk` by itself) |
 | `SDL.h: No such file or directory` | SDL2 is not in the pspdev prefix: `psp-pacman -S sdl2` |
 | `EBOOT.PBP` builds, screen stays black | the firmware is older than 6.00 (`PSP_FW_VERSION` in the Makefile), or the folder is not `ms0:/PSP/GAME/KABLUK` |
 | starts, then "WAD MISSING" in the editor | pick the wad in the settings, or put it next to `EBOOT.PBP` |
