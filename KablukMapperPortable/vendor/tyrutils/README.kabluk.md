@@ -49,7 +49,11 @@ Mechanical only; no algorithm was touched.
    falls back to `GetTickCount()` there.
 6. **`common/threads.c`** — upstream only defines `GetDefaultThreads()` for the
    threaded builds, but `light` and `vis` call it unconditionally; the
-   single-threaded path now returns 1.
+   single-threaded path now returns 1. The Win32 `RunThreadsOn()` also runs
+   the worker inline when `numthreads <= 1` instead of creating a thread: the
+   editor catches a tool's fatal error with `longjmp`, which must not happen
+   on a worker thread. `bspchain.c` passes `-threads 1` to `light` and `vis`,
+   so the Windows build behaves exactly like the single threaded one.
 7. **`qbsp/tyr_qbsp_prefix.h` (new)** — qbsp ships private copies of cmdlib,
    mathlib, file and bspfile. Linked into one binary they collide with
    `common/*` and with `light/entities.c`, so the 19 clashing symbols get a

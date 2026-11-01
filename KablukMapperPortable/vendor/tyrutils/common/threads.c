@@ -123,6 +123,16 @@ RunThreadsOn(int start, int workcnt, void *(func)(void *), void *arg)
     workcount = workcnt;
     oldpercent = -1;
 
+    /* Kabluk Mapper: one thread means "run right here". The editor catches
+     * the tools' fatal errors with longjmp, and a longjmp out of a worker
+     * thread would leave the others running on a stack that is gone. */
+    if (numthreads <= 1) {
+	func(arg);
+	oldpercent = -1;
+	logprint("\n");
+	return;
+    }
+
     threadid = malloc(sizeof(*threadid) * numthreads);
     threadhandle = malloc(sizeof(*threadhandle) * numthreads);
 

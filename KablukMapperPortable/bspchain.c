@@ -180,16 +180,17 @@ static int run_light(const char *bsp_path)
 
 static int run_vis(const char *bsp_path)
 {
-    char *argv[3];
+    char *argv[4];
     int rc;
 
     argv[0] = (char *)"vis";
-    argv[1] = (char *)bsp_path;
-    argv[2] = NULL;
+    argv[1] = (char *)"-threads"; /* single thread keeps the PSP happy */
+    argv[2] = (char *)"1";
+    argv[3] = (char *)bsp_path;
 
     if (setjmp(chain_jmp) == 0) {
         chain_armed = 1;
-        rc = tyr_vis_main(2, argv);
+        rc = tyr_vis_main(4, (const char **)argv);
         chain_armed = 0;
     } else {
         rc = 1;
