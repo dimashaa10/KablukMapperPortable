@@ -23,11 +23,15 @@
  * Controls (desktop now, PSP buttons too - see keys.h and input.c):
  *   mouse / d-pad     move the grid cursor
  *   X / Z             confirm / cancel (cross / circle on the PSP)
- *   1..4 / TAB / R    pick a tool, next / previous (PSP: R / L)
- *   Q / E             fold the left / right panel (desktop only)
+ *   1..4 / TAB        pick a tool (TAB steps to the next one)
+ *   Q / E             hide / show the tool / property panel (PSP: L / R)
  *   ENTER             editor settings (PSP: SELECT)
  *   F2                compile map window (PSP: START)
  *   ESC               back to the start screen (QUIT is there)
+ *
+ * A panel that is on screen owns the arrows and cross (panel_focus): showing
+ * the tool panel makes the D-pad walk the four tools, showing the property
+ * panel walks its rows, and hiding either one gives them back to the map.
  *
  * The start screen is not the only way out: the settings window has a
  * MAIN MENU button, and circle / Z on the start screen goes back to the map
@@ -88,7 +92,8 @@ typedef struct App {
     int hover_tool;
     int left_open;
     int right_open;
-    int panel_focus; /* arrows + X work on the property list */
+    int panel_focus; /* FOCUS_*: what the arrows and cross act on */
+    int tool_sel;    /* row the arrows sit on in the tool panel   */
     int mouse_x;
     int mouse_y;
 
@@ -295,8 +300,9 @@ static void app_new_map(void)
     values_init(&app.values);
     props_view_init(&app.props);
     app_seed_defaults();
-    app.panel_focus = 0;
+    app.panel_focus = FOCUS_GRID;
     app.tool = TOOL_SELECT;
+    app.tool_sel = TOOL_SELECT;
     app.menu.resume_editor = 1;
     menu_close(&app.menu);
 }
@@ -315,7 +321,8 @@ static void app_load_map(const char *path)
     grid_init(&app.grid);
     values_init(&app.values);
     props_view_init(&app.props);
-    app.panel_focus = 0;
+    app.panel_focus = FOCUS_GRID;
+    app.tool_sel = app.tool;
 
     if (mapfile_peek_wad(path, wad, PATH_LEN)) {
         char resolved[PATH_LEN];
@@ -432,6 +439,7 @@ static void app_handle_menu_request(void)
 static void app_select_tool(int tool)
 {
     app.tool = tool;
+    app.tool_sel = tool;
     if (tool == TOOL_ENTITY) {
         picker_open_entities(&app.picker, &app.fgd, app.entity_class);
     } else if (tool == TOOL_TEXTURE) {
@@ -490,13 +498,82 @@ static void app_handle_keyboard_event(const SDL_Event *event)
     }
 }
 
+/* Brings the tool panel on screen if it is hidden and hands it the pad. */
+static void app_focus_tools(void)
+{
+    if (!app.left_open) {
+        app.left_open = 1;
+        app_refresh_layout();
+    }
+    app.panel_focus = FOCUS_TOOLS;
+    app.tool_sel = app.tool; /* the arrows start on the tool in use */
+}
+
+/* The same for the property panel. */
+static void app_focus_props(void)
+{
+    if (!app.right_open) {
+        app.right_open = 1;
+        app_refresh_layout();
+    }
+    app.panel_focus = FOCUS_PROPS;
+    if (app.props.sel < 0 && app.fgd.prop_count > 0) {
+        app.props.sel = 0;
+    }
+}
+
+/* L: hide / show the tool panel. Showing it hands the pad to the four tools,
+ * hiding it gives the pad back to the map, so the arrows always act on what is
+ * on screen. Pressed while the panel is on screen but the map has the pad, it
+ * takes the pad instead of hiding the panel. */
+static void app_toggle_left_panel(void)
+{
+    if (app.left_open && app.panel_focus == FOCUS_TOOLS) {
+        app.left_open = 0;
+        app.panel_focus = FOCUS_GRID;
+        app_refresh_layout();
+        return;
+    }
+    app_focus_tools();
+}
+
+/* R: the same for the property panel. */
+static void app_toggle_right_panel(void)
+{
+    if (app.right_open && app.panel_focus == FOCUS_PROPS) {
+        app.right_open = 0;
+        app.panel_focus = FOCUS_GRID;
+        app_refresh_layout();
+        return;
+    }
+    app_focus_props();
+}
+
+/* arrows / X while the tool palette has the focus: they walk the four tool
+ * buttons, cross picks the highlighted one. The tool itself only changes on
+ * cross, so stepping over ENTITY or TEXTURE does not open their list. */
+static void app_tools_key(SDL_Keycode sym)
+{
+    if (sym == KEY_CANCEL) {
+        app_toggle_left_panel(); /* circle as well: hide it, the map gets the pad */
+        return;
+    }
+    if (sym == KEY_DOWN) {
+        app.tool_sel = (app.tool_sel + 1) % PANEL_BUTTONS;
+    } else if (sym == KEY_UP) {
+        app.tool_sel = (app.tool_sel + PANEL_BUTTONS - 1) % PANEL_BUTTONS;
+    } else if (sym == KEY_CONFIRM) {
+        app_select_tool(app.tool_sel);
+    }
+}
+
 /* arrows / X while the right panel has the focus */
-static void app_panel_key(SDL_Keycode sym)
+static void app_props_key(SDL_Keycode sym)
 {
     int count = app.fgd.prop_count;
 
     if (sym == KEY_CANCEL) {
-        app.panel_focus = 0;
+        app_toggle_right_panel(); /* circle: hide it, back to the map */
         return;
     }
     if (count <= 0) {
@@ -575,46 +652,65 @@ static void app_secondary_action(void)
 
 static void app_handle_key(const SDL_KeyboardEvent *key)
 {
-    if (app.panel_focus) {
-        app_panel_key(key->keysym.sym);
-        return;
-    }
+    SDL_Keycode sym = key->keysym.sym;
 
-    switch (key->keysym.sym) {
+    /* these work whatever has the focus: the windows, the two panels, the
+     * tools themselves */
+    switch (sym) {
     case KEY_QUIT:
         menu_open_main(&app.menu); /* Quit lives on the start screen */
-        break;
+        return;
 
     case KEY_OPEN_SETTINGS:
         menu_open_settings(&app.menu);
-        break;
+        return;
 
     case KEY_OPEN_COMPILE:
         compileui_open(&app.compile_ui);
-        break;
+        return;
 
     case KEY_PANEL_LEFT:
-        app.left_open = !app.left_open;
-        app_refresh_layout();
-        break;
+        app_toggle_left_panel();
+        return;
 
     case KEY_PANEL_RIGHT:
-        app.right_open = !app.right_open;
-        app.panel_focus = 0;
-        app_refresh_layout();
-        break;
+        app_toggle_right_panel();
+        return;
 
     case KEY_PROP_FOCUS:
-        if (!app.right_open) {
-            app.right_open = 1;
-            app_refresh_layout();
-        }
-        app.panel_focus = 1;
-        if (app.props.sel < 0 && app.fgd.prop_count > 0) {
-            app.props.sel = 0;
-        }
-        break;
+        app_focus_props();
+        return;
 
+    case KEY_TOOL_1:
+        app_select_tool(TOOL_SELECT);
+        return;
+    case KEY_TOOL_2:
+        app_select_tool(TOOL_BLOCK);
+        return;
+    case KEY_TOOL_3:
+        app_select_tool(TOOL_ENTITY);
+        return;
+    case KEY_TOOL_4:
+        app_select_tool(TOOL_TEXTURE);
+        return;
+    case KEY_TOOL_NEXT:
+        app_select_tool((app.tool + 1) % PANEL_BUTTONS);
+        return;
+
+    default:
+        break;
+    }
+
+    if (app.panel_focus == FOCUS_TOOLS) {
+        app_tools_key(sym);
+        return;
+    }
+    if (app.panel_focus == FOCUS_PROPS) {
+        app_props_key(sym);
+        return;
+    }
+
+    switch (sym) {
     case KEY_LEFT:
         grid_move_cursor(&app.grid, &app.layout, -1, 0);
         break;
@@ -633,25 +729,6 @@ static void app_handle_key(const SDL_KeyboardEvent *key)
         break;
     case KEY_CANCEL:
         app_secondary_action();
-        break;
-
-    case KEY_TOOL_1:
-        app_select_tool(TOOL_SELECT);
-        break;
-    case KEY_TOOL_2:
-        app_select_tool(TOOL_BLOCK);
-        break;
-    case KEY_TOOL_3:
-        app_select_tool(TOOL_ENTITY);
-        break;
-    case KEY_TOOL_4:
-        app_select_tool(TOOL_TEXTURE);
-        break;
-    case KEY_TOOL_NEXT:
-        app_select_tool((app.tool + 1) % PANEL_BUTTONS);
-        break;
-    case KEY_TOOL_PREV:
-        app_select_tool((app.tool + PANEL_BUTTONS - 1) % PANEL_BUTTONS);
         break;
 
     default:
@@ -777,14 +854,14 @@ static void app_handle_event(const SDL_Event *event)
             int row = props_hit_row(&app.fgd, &app.props, app.mouse_x,
                                     app.mouse_y);
 
-            app.panel_focus = 1;
+            app.panel_focus = FOCUS_PROPS;
             if (row >= 0) {
                 app.props.sel = row;
                 app_edit_property(row);
             }
             break;
         }
-        app.panel_focus = 0;
+        app.panel_focus = FOCUS_GRID;
 
         app_move_cursor_to_mouse();
         if (event->button.button == SDL_BUTTON_LEFT) {
@@ -811,7 +888,10 @@ static void app_render(void)
 
     grid_draw(&app.gfx, &app.grid, &app.layout, &app.textures, &app.wad);
     if (app.left_open) {
-        ui_draw_panel(&app.gfx, app.tool, app.hover_tool);
+        int focused = app.panel_focus == FOCUS_TOOLS;
+
+        ui_draw_panel(&app.gfx, app.tool,
+                      focused ? app.tool_sel : app.hover_tool, focused);
     }
     if (app.right_open) {
         props_draw(&app.gfx, &app.grid, &app.fgd, &app.props, &app.values);
@@ -878,7 +958,8 @@ int main(int argc, char *argv[])
     app.hover_tool = -1;
     app.left_open = 1;
     app.right_open = 1;
-    app.panel_focus = 0;
+    app.panel_focus = FOCUS_GRID;
+    app.tool_sel = TOOL_SELECT;
     app.mouse_x = 0;
     app.mouse_y = 0;
     app.current_tex = -1;

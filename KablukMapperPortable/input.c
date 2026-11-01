@@ -11,12 +11,14 @@
  *   circle (B)     -> KEY_CANCEL   ("Z")
  *   square (X)     -> left mouse click at the pointer (tool buttons, rows)
  *   triangle (Y)   -> KEY_PROP_FOCUS (open the property panel)
- *   L / R          -> previous / next tool of the left panel
+ *   L / R          -> show / hide the tool / property panel
  *   SELECT         -> editor settings
  *   START          -> compile window
  *
- * Choosing a tool must not depend on the pointer: on a worn PSP the nub is
- * often the first thing to fail, and R alone then cycles through all four.
+ * Showing a panel moves the pad onto it (main.c), so the tools can be picked
+ * with nothing but the D-pad and cross: L, up / down, cross, L. The nub is
+ * often the first thing to wear out on an old handheld, and none of that
+ * needs it.
  *
  * Only the D-pad repeats; a repeating "confirm" would fire the same action
  * again and again while the button is held.
@@ -69,8 +71,8 @@ static const PadKey pad_keys[] = {
     { SDL_CONTROLLER_BUTTON_A, KEY_CONFIRM, 0 },
     { SDL_CONTROLLER_BUTTON_B, KEY_CANCEL, 0 },
     { SDL_CONTROLLER_BUTTON_Y, KEY_PROP_FOCUS, 0 },
-    { SDL_CONTROLLER_BUTTON_LEFTSHOULDER, KEY_TOOL_PREV, 0 },
-    { SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, KEY_TOOL_NEXT, 0 },
+    { SDL_CONTROLLER_BUTTON_LEFTSHOULDER, KEY_PANEL_LEFT, 0 },
+    { SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, KEY_PANEL_RIGHT, 0 },
     { SDL_CONTROLLER_BUTTON_BACK, KEY_OPEN_SETTINGS, 0 },
     { SDL_CONTROLLER_BUTTON_START, KEY_OPEN_COMPILE, 0 }
 };

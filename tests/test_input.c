@@ -3,7 +3,7 @@
  *
  * The SDL game controller API is faked with a single pad, so the translation
  * itself can be walked through: the nub in both directions, a nub that does
- * not rest in the middle, and the buttons that pick a tool.
+ * not rest in the middle, and the buttons that show the panels and pick.
  */
 #include <stdio.h>
 #include <string.h>
@@ -220,15 +220,17 @@ int main(void)
     joy_axis[1] = 0;
     run();
 
-    pad.button[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = 1;
-    n = run();
-    check(got(n, SDL_KEYDOWN, KEY_TOOL_NEXT), "R -> next tool", NULL);
-    pad.button[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = 0;
-    run();
     pad.button[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = 1;
     n = run();
-    check(got(n, SDL_KEYDOWN, KEY_TOOL_PREV), "L -> previous tool", NULL);
+    check(got(n, SDL_KEYDOWN, KEY_PANEL_LEFT), "L -> show / hide the tool panel",
+          NULL);
     pad.button[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = 0;
+    run();
+    pad.button[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = 1;
+    n = run();
+    check(got(n, SDL_KEYDOWN, KEY_PANEL_RIGHT),
+          "R -> show / hide the property panel", NULL);
+    pad.button[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = 0;
     run();
 
     pad.button[SDL_CONTROLLER_BUTTON_Y] = 1;

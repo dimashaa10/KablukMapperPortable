@@ -51,6 +51,12 @@
 /* Panels (both can be folded away: L = left, R = right)               */
 /* ------------------------------------------------------------------ */
 #define PANEL_W 80       /* left tool panel  */
+
+/* What the arrow keys / D-pad and cross act on. A panel that is on screen owns
+ * the pad, hiding it gives the pad back to the map (see app_toggle_*_panel). */
+#define FOCUS_GRID 0  /* the map: cursor, painting, selection     */
+#define FOCUS_PROPS 1 /* the right property list                  */
+#define FOCUS_TOOLS 2 /* the left tool palette                    */
 #define RIGHT_PANEL_W 160 /* right property panel (FGD property list) */
 
 #define PANEL_BUTTONS 4

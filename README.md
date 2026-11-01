@@ -64,12 +64,17 @@ the pad controls and the limits of the PSP renderer - is in
 | `X` | cross | confirm / pick / press |
 | `Z`, `ESC` | circle | cancel, and leave the editor for the start screen |
 | mouse | nub + `□` | pointer, and the click at that point |
-| `Q` / `E` | - | fold the tool / property panel |
-| `TAB` / `R` | `R` / `L` | next / previous tool of the left panel |
+| `Q` / `E` | `L` / `R` | hide / show the tool / property panel |
+| `TAB` | - | next tool of the left panel |
 | `F` | triangle | jump into the property panel |
 | `ENTER` | `SELECT` | settings |
 | `F2` | `START` | compile window |
 | `N` | - | new folder in the file browser |
+
+A panel that is on screen owns the arrows and cross: `L` shows the tool
+palette and the D-pad then walks the four tools (cross picks one, `L` or
+circle hides it again), `R` does the same for the property rows. Hiding a
+panel always gives the arrows back to the map.
 
 `ESC` never closes the program: the start screen with `CREATE MAP` /
 `LOAD MAP` / `QUIT` is the way in and out. On the PSP the settings window has

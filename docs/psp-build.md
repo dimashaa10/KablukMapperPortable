@@ -144,7 +144,7 @@ desktop version receives. Every other file is unchanged.
 | `O` (circle) | back / cancel |
 | `□` (square) | left click where the pointer is - this is how a block gets a tool or a texture gets picked |
 | `△` (triangle) | jump to the property panel |
-| `L` / `R` | previous / next **tool** (`SELECT`, `BLOCK`, `ENTITY`, `TEXTURE`) |
+| `L` / `R` | hide / show the tool panel (`L`) and the property panel (`R`) |
 | `SELECT` | settings window |
 | `START` | compile window |
 
@@ -159,12 +159,18 @@ and **square** is the mouse. Moving the nub slides a pointer over the screen
 and pressing square acts at that spot, which is what the block palette, the
 texture picker and the property rows expect.
 
-**`R` alone switches tools.** The tool palette is a column of buttons on the
-left edge, which is a long way from the middle of the screen for a nub - and
-on a well used handheld the nub is the first thing to wear out. `R` steps to
-the next tool and `L` back to the previous one, wrapping around, so a whole
-map can be built without ever pointing at the palette. The nub is still there
-for the finer things (a property row, a texture in the list).
+**A panel that is on screen owns the pad.** `L` shows the tool panel, and from
+that moment the D-pad walks the four tools instead of the map: up / down move
+the amber frame, cross picks the tool and `L` (or circle) hides the panel
+again - the arrows are back on the map. The tool itself only changes on cross,
+so stepping over `ENTITY` or `TEXTURE` does not open their list by accident.
+`R` does exactly the same for the property panel and its rows, and triangle
+jumps straight into it.
+
+That is the whole reason the palette can be used without the nub: the nub is
+often the first thing to wear out on an old handheld, and this way a map can
+be built with `L`, up / down, cross, `L` and the D-pad alone. (On the desktop
+`TAB` steps to the next tool from anywhere.)
 
 The nub is also re-centred every time the pad is opened: the editor remembers
 where the stick rests and measures from there, so a nub that sits off centre

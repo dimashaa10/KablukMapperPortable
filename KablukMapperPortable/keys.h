@@ -18,8 +18,10 @@
 #define KEY_CONFIRM SDLK_x /* PSP: cross  */
 #define KEY_CANCEL SDLK_z  /* PSP: circle - also closes the lists */
 
-#define KEY_PANEL_LEFT SDLK_q  /* fold the left tool panel (desktop)   */
-#define KEY_PANEL_RIGHT SDLK_e /* fold the right property panel (desktop) */
+/* PSP: L / R. Showing a panel hands it the arrows and cross, hiding it gives
+ * them back to the map (see app_toggle_left_panel in main.c). */
+#define KEY_PANEL_LEFT SDLK_q  /* show / hide the tool panel     */
+#define KEY_PANEL_RIGHT SDLK_e /* show / hide the property panel */
 
 #define KEY_PROP_FOCUS SDLK_f /* jump into the right panel to edit values */
 
@@ -35,9 +37,6 @@
 #define KEY_TOOL_2 SDLK_2
 #define KEY_TOOL_3 SDLK_3
 #define KEY_TOOL_4 SDLK_4
-/* PSP: R / L cycle the tools of the left panel. On the desktop TAB is the
- * familiar "next", and R the one that goes back. */
-#define KEY_TOOL_NEXT SDLK_TAB
-#define KEY_TOOL_PREV SDLK_r
+#define KEY_TOOL_NEXT SDLK_TAB /* next tool, also while a panel has the pad */
 
 #endif /* KMP_KEYS_H */

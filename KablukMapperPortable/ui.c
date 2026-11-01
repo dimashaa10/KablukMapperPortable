@@ -119,7 +119,7 @@ static void ui_draw_icon(Gfx *g, int tool, int x, int y, unsigned int rgb)
 /* ------------------------------------------------------------------ */
 /* Panel                                                               */
 /* ------------------------------------------------------------------ */
-static void ui_draw_button(Gfx *g, int index, int active, int hover)
+static void ui_draw_button(Gfx *g, int index, int active, int hover, int cursor)
 {
     int x;
     int y;
@@ -133,6 +133,11 @@ static void ui_draw_button(Gfx *g, int index, int active, int hover)
 
     gfx_rect(g, x, y, w, h, active ? COL_BTN_ACTIVE : (hover ? COL_BTN_HOVER : COL_BTN));
     gfx_outline(g, x, y, w, h, active ? COL_BTN_EDGE_ACTIVE : COL_BTN_EDGE);
+
+    /* the row the arrows are on, while the panel has the pad */
+    if (cursor) {
+        gfx_outline(g, x - 1, y - 1, w + 2, h + 2, COL_ACCENT);
+    }
 
     if (active) {
         /* small amber marker on the left edge */
@@ -148,14 +153,18 @@ static void ui_draw_button(Gfx *g, int index, int active, int hover)
              active ? COL_ACCENT : COL_TEXT_DIM, 1);
 }
 
-void ui_draw_panel(Gfx *g, int active_tool, int hover_tool)
+/* 'cursor_tool' is the row the arrows sit on (the mouse uses it as the hover
+ * row), and 'focused' says that the panel is the one holding the pad. */
+void ui_draw_panel(Gfx *g, int active_tool, int cursor_tool, int focused)
 {
     int i;
 
     gfx_rect(g, 0, 0, PANEL_W, SCREEN_H, COL_PANEL);
-    gfx_rect(g, PANEL_W - 2, 0, 2, SCREEN_H, COL_PANEL_EDGE);
+    gfx_rect(g, PANEL_W - 2, 0, 2, SCREEN_H,
+             focused ? COL_ACCENT : COL_PANEL_EDGE);
 
     for (i = 0; i < PANEL_BUTTONS; i++) {
-        ui_draw_button(g, i, i == active_tool, i == hover_tool);
+        ui_draw_button(g, i, i == active_tool, i == cursor_tool,
+                       focused && i == cursor_tool && i != active_tool);
     }
 }
