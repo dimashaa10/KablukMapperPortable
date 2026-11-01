@@ -78,6 +78,8 @@ InterruptThreadProgress__(void)
 #ifdef WIN32
 #define HAVE_THREADS
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX /* keep the SDK's min/max macros out of qbsp's way */
 #include <windows.h>
 
 int numthreads = 1;
