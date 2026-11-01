@@ -82,6 +82,39 @@ $(warning libSDL2.a not found - looked in: $(SDL2_LIBDIR_TRIES))
 SDL2_LIBDIR := $(PSPDEV)/psp/lib
 endif
 
+# ---------------------------------------------------------------------------
+# Path form. The shell says /c/pspdev, and most Windows psp-gcc builds take
+# that - but a native Windows one reads it as C:\c\pspdev and then cannot find
+# a single header, which looks exactly like "SDL.h: No such file or directory"
+# one line into the first file. So ask the compiler once, with the cheapest
+# test there is, and hand it C:/pspdev/... when the POSIX form does not work.
+# Both forms are legal for msys/cygwin binaries, the Windows one is legal
+# everywhere.
+# ---------------------------------------------------------------------------
+# (no -o: psp-gcc writes the preprocessed text to stdout and the shell throws it
+# away, which also keeps "/dev/null" away from a Windows compiler)
+psp_have_header = $(shell { printf '#include <$(1)>\n' | psp-gcc -E -xc -I$(2) - ; } \
+                    >/dev/null 2>&1 && echo yes)
+
+POSIX_PATHS_OK := $(call psp_have_header,SDL.h,$(SDL2_INC))
+
+CONVERT_PATHS :=
+ifeq ($(POSIX_PATHS_OK),)
+ifneq ($(shell command -v psp-gcc 2>/dev/null),)
+ifneq ($(shell command -v cygpath 2>/dev/null),)
+CONVERT_PATHS := 1
+$(warning psp-gcc does not find the SDK headers through /c/... paths - handing it C:/... instead)
+endif
+endif
+endif
+
+win = $(if $(CONVERT_PATHS),$(shell cygpath -m '$(1)' 2>/dev/null || echo '$(1)'),$(1))
+
+# kept in the form the shell uses, for the messages and "make sdk-info"
+PSPDEV_POSIX := $(PSPDEV)
+PSPSDK_POSIX := $(PSPSDK)
+PSPSDK_MAKE := $(PSPSDK)
+
 OBJS = main.o input.o gfx.o grid.o ui.o font.o layout.o props.o settings.o \
        fs.o menu.o fgd.o wad.o textures.o picker.o compile.o compileui.o \
        bspchain.o keyboard.o values.o mapfile.o
@@ -97,18 +130,25 @@ TYR_OBJS = $(TYR_SRC:.c=.o)
 OBJS += $(TYR_OBJS)
 
 CFLAGS = -O2 -G0 -Wall -std=gnu99 -D__PSP__ -DKMP_HAVE_PSP \
-         -I. -I$(SDL2_INC) -DTYRUTILS_VERSION=v0.17-kabluk
+         -I. -I$(call win,$(SDL2_INC)) -DTYRUTILS_VERSION=v0.17-kabluk
 
 # static link order matters: SDL2 first, then the psp libraries it needs.
-LIBS = -L$(SDL2_LIBDIR) -lSDL2main -lSDL2 -lGL -lpspvram -lpspaudio -lpspvfpu \
-       -lpsphprm -lpsppower -lpsprtc -lm
+LIBS = -L$(call win,$(SDL2_LIBDIR)) -lSDL2main -lSDL2 -lGL -lpspvram \
+       -lpspaudio -lpspvfpu -lpsphprm -lpsppower -lpsprtc -lm
 
 # The vendored TyrUtils is C99 and warns on everything GCC 15 knows.
 $(TYR_OBJS): %.o: %.c
 	$(CC) $(CFLAGS) -w -c $< -o $@
 
+# build.mak puts $(PSPDEV)/psp/include and $(PSPSDK)/include on the psp-gcc
+# command line itself, so from here on they carry the form the compiler wants.
+# "override": PSPDEV may have come from the command line, and it still has to
+# arrive at psp-gcc in the form the compiler understands.
+override PSPDEV := $(call win,$(PSPDEV))
+override PSPSDK := $(call win,$(PSPSDK))
+
 # build.mak brings the psp-gcc rules, PARAM.SFO and pack-pbp.
-include $(PSPSDK)/lib/build.mak
+include $(PSPSDK_MAKE)/lib/build.mak
 
 # A folder that can be copied straight to the memory stick: EBOOT.PBP plus
 # the .fgd it needs. A .wad and palette.lmp are copied when they sit in
@@ -127,15 +167,16 @@ dist: EBOOT.PBP
 
 # What the build found, for when something is missing on this machine.
 sdk-info:
-	@echo "PSPDEV      : $(PSPDEV)"
-	@echo "PSPSDK      : $(PSPSDK)"
+	@echo "PSPDEV      : $(PSPDEV_POSIX)$(if $(CONVERT_PATHS), -> $(PSPDEV))"
+	@echo "PSPSDK      : $(PSPSDK_POSIX)$(if $(CONVERT_PATHS), -> $(PSPSDK))"
 	@echo "SDL2 headers: $(SDL2_INC)"
 	@echo "SDL2 library: $(SDL2_LIBDIR)"
+	@echo "path form   : $(if $(CONVERT_PATHS),C:/... (psp-gcc wants Windows paths),/c/... (psp-gcc takes POSIX paths))"
 	@echo "psp-gcc     : $$(command -v psp-gcc || echo '(not on PATH)')"
 	@echo "psp-pacman  : $$(command -v psp-pacman || echo '(not on PATH)')"
-	@echo "SDL.h files under $(PSPDEV):"
-	@-find "$(PSPDEV)" -maxdepth 6 -name SDL.h 2>/dev/null | head -5
-	@echo "libSDL2*.a files under $(PSPDEV):"
-	@-find "$(PSPDEV)" -maxdepth 6 -name 'libSDL2*.a' 2>/dev/null | head -5
+	@echo "SDL.h files under $(PSPDEV_POSIX):"
+	@-find "$(PSPDEV_POSIX)" -maxdepth 6 -name SDL.h 2>/dev/null | head -5
+	@echo "libSDL2*.a files under $(PSPDEV_POSIX):"
+	@-find "$(PSPDEV_POSIX)" -maxdepth 6 -name 'libSDL2*.a' 2>/dev/null | head -5
 
 .PHONY: dist sdk-info

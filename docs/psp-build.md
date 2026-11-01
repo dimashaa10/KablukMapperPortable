@@ -43,7 +43,8 @@ make sdk-info
 ```
 
 It prints `PSPDEV`, `PSPSDK`, the SDL2 header and library folders it picked,
-whether `psp-gcc` and `psp-pacman` are on `PATH`, and every `SDL.h` and
+the path form it decided on (`/c/...` or `C:/...`, see the troubleshooting
+table), whether `psp-gcc` and `psp-pacman` are on `PATH`, and every `SDL.h` and
 `libSDL2*.a` under the toolchain. The Makefile looks for `SDL.h` by name in
 `<pspdev>/psp/include/SDL2`, `<pspdev>/psp/include`,
 `<pspdev>/psp/sdk/include` and whatever `psp-pkg-config --cflags SDL2` says, so
@@ -195,7 +196,8 @@ XMB, and `ESC` / circle leaves the editor back to the start screen.
 | --- | --- |
 | `psp-config: command not found` | `PATH` / `PSPDEV` is not set in this shell - see Build |
 | `/pspdev/psp/sdk/lib/build.mak: No such file or directory` | the Windows `psp-config` dropped the `C:` of `C:\pspdev`; say where it is: `make PSPDEV=/c/pspdev` (the Makefile also tries `/c/pspdev/psp/sdk` by itself) |
-| `SDL.h: No such file or directory` | SDL2 is not in the pspdev prefix: `psp-pacman -S sdl2`, then `make sdk-info` to see where it landed |
+| `SDL.h: No such file or directory` although `make sdk-info` finds the header | the path form: a native Windows `psp-gcc` reads `/c/pspdev` as `C:\c\pspdev`. The Makefile tests this itself and hands over `C:/pspdev/...` when needed (`sdk-info` prints `path form`); for a hand written command, use `C:/pspdev/...` |
+| `SDL.h: No such file or directory` and `sdk-info` does not find it | SDL2 is not in the pspdev prefix - see "What you need" (libraries zip, or `psp-pacman -S sdl2`) |
 | `psp-pacman`: `msys-archive-13.dll: cannot open shared object file` | the bundled pacman was built against an older MSYS2 `libarchive` than the one on your machine - skip it and extract `pspdev-win-libraries-15.2.0-v2.zip` over `C:\pspdev` instead |
 | `cannot find -lSDL2main` / `-lSDL2` | the headers are there but the static libraries are not; the same `psp-pacman -S sdl2` fixes it, `make sdk-info` lists the `.a` files it found |
 | `EBOOT.PBP` builds, screen stays black | the firmware is older than 6.00 (`PSP_FW_VERSION` in the Makefile), or the folder is not `ms0:/PSP/GAME/KABLUK` |
