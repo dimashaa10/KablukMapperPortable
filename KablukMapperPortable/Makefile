@@ -130,10 +130,13 @@ TYR_OBJS = $(TYR_SRC:.c=.o)
 OBJS += $(TYR_OBJS)
 
 CFLAGS = -O2 -G0 -Wall -std=gnu99 -D__PSP__ -DKMP_HAVE_PSP \
-         -I. -I$(call win,$(SDL2_INC)) -DTYRUTILS_VERSION=v0.17-kabluk
+         -I. -Ivendor/tyrutils/include -I$(call win,$(SDL2_INC)) \
+         -DTYRUTILS_VERSION=v0.17-kabluk
 
 # static link order matters: SDL2 first, then the psp libraries it needs.
-LIBS = -L$(call win,$(SDL2_LIBDIR)) -lSDL2main -lSDL2 -lGL -lpspvram \
+# static link order matters: SDL2 first, then pspgl and the psp libraries it
+# draws through (-lpspgu), then the rest of the SDK.
+LIBS = -L$(call win,$(SDL2_LIBDIR)) -lSDL2main -lSDL2 -lGL -lpspgu -lpspvram \
        -lpspaudio -lpspvfpu -lpsphprm -lpsppower -lpsprtc -lm
 
 # The vendored TyrUtils is C99 and warns on everything GCC 15 knows.

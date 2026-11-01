@@ -66,6 +66,20 @@ static void wad_name_copy(char *dst, const unsigned char *src)
     dst[n] = '\0';
 }
 
+/* Copy a name that is already terminated into a WAD_NAME_LEN field. The
+ * strncpy() this replaces made GCC warn (-Wstringop-truncation) about a copy
+ * that truncates, and the PSP build now shows warnings. */
+static void wad_name_store(char *dst, const char *src)
+{
+    int i = 0;
+
+    while (i < WAD_NAME_LEN - 1 && src[i] != '\0') {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = '\0';
+}
+
 /* ------------------------------------------------------------------ */
 /* Palette                                                             */
 /* ------------------------------------------------------------------ */
@@ -257,8 +271,7 @@ int wad_load(Wad *wad, const char *path)
                 if (w >= 8 && h >= 8 && w <= 1024 && h <= 1024) {
                     int k = wad->count;
 
-                    strncpy(wad->names[k], name, WAD_NAME_LEN - 1);
-                    wad->names[k][WAD_NAME_LEN - 1] = '\0';
+                    wad_name_store(wad->names[k], name);
                     wad->lump_offset[k] = pos;
                     wad->lump_size[k] = size;
                     wad->tex_w[k] = w;
@@ -267,8 +280,7 @@ int wad_load(Wad *wad, const char *path)
                 }
             }
         } else if ((unsigned int)size == 768 && palette_lump[0] == '\0') {
-            strncpy(palette_lump, name, WAD_NAME_LEN - 1);
-            palette_lump[WAD_NAME_LEN - 1] = '\0';
+            wad_name_store(palette_lump, name);
             palette_ofs = pos;
             palette_size = size;
         }
