@@ -140,6 +140,13 @@ XMB, and `ESC` / circle leaves the editor back to the start screen.
 * **Memory.** The editor's own 21 objects are ~60 KB of code. The bulk of the
   RAM goes to tyrutils while a map compiles; a map of the size shipped here
   compiles to ~443 KB of `.bsp`.
+* **Draw calls.** Everything on screen is a filled rectangle or a line - the
+  text is glyph pixels merged into vertical runs. The editor's own screen is
+  about 1 000 of them per frame, the row heavy file browser about 3 800,
+  which is what the PSP's graphics unit is there for at the 60 fps the loop
+  caps to. If a future screen ever feels slow, the first thing to add is an
+  8 x 8 glyph atlas texture instead of the runs (`gfx_text()` is the only
+  place that draws them).
 * **No filesystem surprises.** The PSP build uses newlib's `ms0:/` paths, and
   `fs.c` creates folders with the same code as on the desktop.
 
