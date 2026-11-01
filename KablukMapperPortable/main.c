@@ -15,7 +15,7 @@ SDL_Window* window = SDL_CreateWindow(
 	SDL_WINDOW_SHOWN);
 
 	if (!window) {
-		printf("window not created: %s\n", SDL_GetError());
+		printf("Window not created: %s\n", SDL_GetError());
 		SDL_Quit();
 		return 1;
 }
