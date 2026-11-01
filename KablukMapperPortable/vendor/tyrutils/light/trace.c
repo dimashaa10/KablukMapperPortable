@@ -68,6 +68,9 @@ MakeTnodes(const bsp2_t *bsp)
     int i;
 
     tnode_p = tnodes = malloc(bsp->numnodes * sizeof(tnode_t));
+    if (!tnodes)
+	Error("%s: allocation of %d bytes failed\n", __func__,
+	      (int)(bsp->numnodes * sizeof(tnode_t)));
     for (i = 0; i < bsp->nummodels; i++)
 	MakeTnodes_r(bsp->dmodels[i].headnode[0], bsp);
 }

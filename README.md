@@ -19,7 +19,12 @@ repository.
   edited on an on-screen keyboard.
 * **Real compiling.** `qbsp`, `light` and `vis` are vendored (`vendor/tyrutils`)
   and run in order from the compile window (`F2`), with their logs and the
-  `.bsp` / `.prt` written next to the `.map`.
+  `.bsp` / `.prt` written next to the `.map`. A failing tool is a line in that
+  log, never a closed editor, and every stage prints the free heap and the
+  time it took ([docs/compile-chain.md](docs/compile-chain.md)).
+* **A texture grid.** The `TEXTURE` picker is nine square cells across and
+  four down: the texture as a 40 px thumbnail, its name underneath, arrows to
+  walk it and the page following the selection.
 * **Loading back.** The editor's own output reopens: brushes become cells,
   point entities come back with their keys, and the settings follow the file.
 * **A settings window** (`ENTER`) for the wad, the output folder, the map name
@@ -107,9 +112,9 @@ repository and check the settings rows, the browser paths (desktop and
 | `props.c`, `fgd.c` | the property panel and `.fgd` parsing |
 | `mapfile.c` | reading a `.map` back into the editor |
 | `compile.c`, `compileui.c`, `bspchain.c` | the exporter and the compile window |
-| `wad.c`, `textures.c` | wad reading, palette, block previews |
+| `wad.c`, `textures.c` | wad reading, palette, block previews and the picker thumbnails |
 | `gfx.c`, `font.c` | the drawing layer and the 5 x 7 font |
-| `fs.c`, `picker.c`, `settings.c`, `keyboard.c` | folders, the file browser, settings, text entry |
+| `fs.c`, `picker.c`, `settings.c`, `keyboard.c` | folders, the file browser, the entity and texture pickers, settings, text entry |
 | `config.h`, `keys.h` | every constant and every key binding |
 
 The editor itself is C89 clean, allocates nothing per frame and uses no

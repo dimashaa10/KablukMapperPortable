@@ -38,9 +38,24 @@ MAPS/MYROOM.MAP
 
 ## Floor and ceiling textures
 
-Both slabs are chosen from the loaded `.wad` with the same list the `TEXTURE`
-tool uses — names and thumbnails, up / down / `X`. An empty row means "first
-texture in the wad", which is what every map used before the setting existed.
+Both slabs are chosen from the loaded `.wad` with the same picker the
+`TEXTURE` tool uses: a grid of square cells, the texture on top and its name
+underneath, nine cells across and four down (36 per page). The arrows walk the
+grid — left / right by one cell, up / down by a row, and the page follows the
+selection — cross confirms, circle closes. An empty setting means "first
+texture in the wad", which is what every map used before it existed.
+
+The thumbnails are built from a mip level picked to fit the cell (a 64 x 64
+texture is shown from its 32 x 32 level), stretched to the cell while keeping
+its shape, so a 32 x 64 texture looks tall instead of being squashed into a
+square. They go through a 48 entry least-recently-used cache, so a wad with
+hundreds of textures costs the same memory as a page of them.
+
+If the **palette** is missing every texture comes out as a grey ramp — a wad
+does not carry one, it is `gfx/palette.lmp` from the game, and the reader looks
+for it (and for a `palette` / `PALETTE` lump, in any capitalisation) next to
+the wad and one and two folders above. When none is found the picker says so
+in its footer instead of leaving you wondering.
 
 The same floor texture is used for the sealing walls the exporter adds around
 the border of the map (see `compile-chain.md`), so a map built without any

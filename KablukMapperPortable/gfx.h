@@ -44,6 +44,10 @@ SDL_Texture *gfx_texture_from_argb(Gfx *g, const unsigned int *pixels, int w, in
 void gfx_texture_destroy(SDL_Texture *texture);
 void gfx_blit(Gfx *g, SDL_Texture *texture, int x, int y, int w, int h);
 
+/* Stretches the texture into the box but keeps its shape: a 32x64 texture
+ * lands in the middle of a square cell instead of being squashed into it. */
+void gfx_blit_fit(Gfx *g, SDL_Texture *texture, int x, int y, int w, int h);
+
 /* Text: built-in 5x7 font, no SDL_ttf needed (important for the PSP port).
  * scale 1 = 5x7 px per glyph, scale 2 = 10x14 px. Returns the x after the
  * last glyph, so calls can be chained. */

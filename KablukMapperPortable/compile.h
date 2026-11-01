@@ -56,6 +56,7 @@ typedef struct CompileJob {
     int brush_done;
     int wall_total;   /* wall runs the exporter adds around the empty border */
     int save_only;    /* 1 = write the .map and stop, do not run the tools */
+    long stage_time;  /* time() when the current tool started */
     int entity_total;
     int entity_done;
 

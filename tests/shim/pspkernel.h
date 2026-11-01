@@ -2,5 +2,6 @@
 #ifndef PSPKERNEL_H_STUB
 #define PSPKERNEL_H_STUB
 int sceKernelExitGame(void);
+unsigned int sceKernelMaxFreeMemSize(void);
 int sceKernelDelayThread(unsigned int usec);
 #endif

@@ -135,6 +135,11 @@ FindModelInfo(const bsp2_t *bsp)
     modelinfo_t *info;
 
     shadowmodels = malloc(sizeof(dmodel_t *) * (bsp->nummodels + 1));
+    /* Kabluk Mapper: the PSP has 32 MB in total, so every allocation here has
+     * to fail as a log line instead of a NULL write. */
+    if (!shadowmodels)
+	Error("%s: allocation of %d bytes failed\n", __func__,
+	      (int)(sizeof(dmodel_t *) * (bsp->nummodels + 1)));
     memset(shadowmodels, 0, sizeof(dmodel_t *) * (bsp->nummodels + 1));
 
     /* The world always casts shadows */
@@ -366,6 +371,9 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
     LoadEntities(bsp);
     MakeTnodes(bsp);
     modelinfo = malloc(bsp->nummodels * sizeof(*modelinfo));
+    if (!modelinfo)
+	Error("%s: allocation of %d bytes failed\n", __func__,
+	      (int)(bsp->nummodels * sizeof(*modelinfo)));
     FindModelInfo(bsp);
     LightWorld(bsp);
     free(modelinfo);

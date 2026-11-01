@@ -12,7 +12,26 @@
  */
 #include "compile.h"
 
+#if defined(KMP_HAVE_PSP) || defined(__PSP__)
+#include <pspkernel.h> /* sceKernelMaxFreeMemSize, for the stage log lines */
+#endif
+
 #include "fs.h"
+
+
+/* Free heap in KB (PSP only; -1 when the platform has no fixed heap to ask
+ * about). Whatever a stage needs has to fit in what is left: the console's
+ * 32 MB are shared with the screen, the textures and the wad, and light is
+ * the stage that asks for the most. Printing it before every stage is how a
+ * compile that dies shows where it ran out. */
+static int compile_free_kb(void)
+{
+#if defined(KMP_HAVE_PSP) || defined(__PSP__)
+    return (int)(sceKernelMaxFreeMemSize() / 1024);
+#else
+    return -1;
+#endif
+}
 
 /* The chain reports its lines through a single callback (see bspchain.h). */
 static CompileJob *log_target = NULL;
@@ -26,6 +45,7 @@ static void chain_line_to_log(const char *line)
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #define MAP_NAME "kabluk"
 #define SLAB_THICKNESS 16
@@ -837,21 +857,49 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         job->chain_started = 1;
         job->progress = 82;
         compile_log_add(job, "CHAIN: QBSP LIGHT VIS");
+        /* said up front: light is the stage that takes minutes on a PSP, and
+         * a screen that stops changing during it is normal */
+        compile_log_add(job, "LIGHT IS THE SLOW ONE: MINUTES ON A PSP");
         job->step++;
         break;
     }
 
     case 7: { /* one tool per frame: qbsp, then light, then vis */
         int before = job->chain.stage;
+        int stage_running;
 
         if (before != BSPCHAIN_DONE && before != BSPCHAIN_FAILED) {
+            int free_kb = compile_free_kb();
+
             len = 0;
             len = cat_str(buf, len, "STAGE ");
-            cat_str(buf, len, bspchain_stage_name(before));
+            len = cat_str(buf, len, bspchain_stage_name(before));
+            if (free_kb >= 0) {
+                len = cat_str(buf, len, " - FREE ");
+                len = cat_int(buf, len, free_kb);
+                len = cat_str(buf, len, " KB");
+            }
+            compile_log_add(job, buf);
+            job->stage_time = (long)time(NULL);
+        }
+
+        stage_running = bspchain_run_stage(&job->chain);
+
+        /* the time is logged whether the stage worked or not: "light took
+         * 74 s and then stopped" is the interesting case */
+        if (before != BSPCHAIN_DONE && before != BSPCHAIN_FAILED) {
+            int seconds = (int)((long)time(NULL) - job->stage_time);
+
+            len = 0;
+            len = cat_str(buf, len, "  ");
+            len = cat_str(buf, len, bspchain_stage_name(before));
+            len = cat_str(buf, len, " DONE IN ");
+            len = cat_int(buf, len, seconds);
+            len = cat_str(buf, len, " S");
             compile_log_add(job, buf);
         }
 
-        if (bspchain_run_stage(&job->chain)) {
+        if (stage_running) {
             job->progress = 82 + (job->chain.stage - 1) * 5;
             break;
         }

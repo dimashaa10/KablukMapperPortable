@@ -277,7 +277,9 @@ static void grid_draw_blocks(Gfx *g, const Grid *grid, const Layout *layout,
             if (tex_index != TEX_NONE && tex_index < wad->count) {
                 SDL_Texture *texture = textures_get(g, textures, wad, tex_index);
                 if (texture != NULL) {
-                    gfx_blit(g, texture, sx, sy, inner, inner);
+                    /* keep the shape: a 32x64 preview used to be squashed
+                     * into the square cell */
+                    gfx_blit_fit(g, texture, sx, sy, inner, inner);
                     continue;
                 }
             }

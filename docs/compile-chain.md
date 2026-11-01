@@ -138,16 +138,47 @@ shaded" Quake minlight. Add your own `light` entities from the FGD
 when you want pools of real light on top of that floor — the exporter counts
 them (`LIGHT ENTITIES: n`) but never invents one.
 
-## One quirk worth knowing
+## What the tools get wrong, and what this port does about it
 
-An AddressSanitizer build of the editor stops the moment a map is compiled:
-`SafeWrite` in `common/cmdlib.c` reads up to three bytes past the end of the
-last lump. That is upstream's lump padding (`AddLump()` writes
-`(size + 3) & ~3` bytes and then a few zero bytes on top), not a bug the port
-introduced - lumps are found through `fileofs`/`filelen`, so the file is read
-correctly by every tool and engine, and the same bytes have been produced
-since the compile chain went in. It is documented in
-`vendor/tyrutils/README.kabluk.md` (change 14) instead of being changed, so a
-regression run under ASAN should stay away from the modes that end in a
-compile (`compile_*`, `slabtex`, `namedcompile`) and use the rest, which are
-clean.
+Four things in the vendored tools turned up while chasing the report "the
+console switches off during `light`". They are listed in
+`vendor/tyrutils/README.kabluk.md` (changes 14 - 17); the short version:
+
+* **`AddLump()` read past the lump buffer.** The BSP writer asked for
+  `(size + 3) & ~3` bytes from a buffer that is only `size` bytes long, and
+  then padded again. It happens on every compile because the entities lump is
+  never a multiple of four. Fixed: exactly `size` bytes, then padding.
+* **`light` dereferenced unchecked allocations.** `modelinfo` and `tnodes` are
+  `malloc`ed and written to on the next line, so a console that ran out of
+  memory died in the middle of the light stage with nothing in the log. They
+  now `Error()`, and `bspchain.c` turns that into a failed stage with the line
+  in the compile log.
+* **`qbsp` did not understand `ms0:/`.** `IsAbsolutePath()` accepted `/` and
+  `C:` only, so the PSP wad path counted as relative and was glued onto
+  `-wadpath` twice: the wad was never opened and every texture disappeared
+  from the `.bsp` (the picker still showed them, because the editor reads the
+  wad itself). A `:` before the first separator is absolute now, and the log
+  says `Opened WAD: ms0:/...` when it worked.
+* **`vis` indexed the texture lump with -1** for faces that have no texture.
+
+## Sizing the stage: what the log prints
+
+Every stage now logs the free heap in front of it and how long it took:
+
+```
+STAGE LIGHT - FREE 18342 KB
+  LIGHT DONE IN 74 S
+```
+
+`FREE` comes from `sceKernelMaxFreeMemSize()` (PSP only; the line is simply
+shorter on the desktop). `qbsp` is the stage that grows - about 7 MB of peak
+for a 28 x 28 map on the host, all of it handed back before the next stage -
+while `light` adds a few hundred KB. The editor also drops every preview
+texture and picker thumbnail before the chain starts, so what the console's
+32 MB are spent on is the tools and the wad.
+
+**If the screen goes dark during `LIGHT`** it is usually not a crash: light is
+the slow stage (tens of seconds to minutes on a PSP) and the backlight timer
+only sees button presses. Press a button, or turn Backlight Auto-Off off in
+the PSP's power save settings. The `LIGHT DONE IN n S` line afterwards says
+the stage finished.

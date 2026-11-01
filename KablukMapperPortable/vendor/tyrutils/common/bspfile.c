@@ -1209,9 +1209,13 @@ AddLump(bspfile_t *bspfile, int lumpnum, const void *data, int count)
 
     lump->fileofs = LittleLong(ftell(bspfile->file));
     lump->filelen = LittleLong(size);
-    SafeWrite(bspfile->file, data, (size + 3) & ~3);
+    /* Kabluk Mapper: write exactly 'size' bytes and then pad the file to a 4
+     * byte boundary. Writing (size + 3) & ~3 bytes read up to three bytes
+     * past the caller's buffer - the entities lump is not a multiple of four,
+     * so it happens on every compile. */
+    SafeWrite(bspfile->file, data, size);
     if (size % 4)
-	SafeWrite(bspfile->file, pad, size % 4);
+	SafeWrite(bspfile->file, pad, 4 - (size % 4));
 }
 
 /*

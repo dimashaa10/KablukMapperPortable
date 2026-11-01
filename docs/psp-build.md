@@ -200,12 +200,23 @@ runs from `ms0:/PSP/GAME/KABLUK` and its own paths are relative to that.
   the pixels on upload. On the PSP that is `ABGR8888`: same colours, red and
   blue swapped, no visible difference. The biggest texture the editor makes is
   64 x 64, which the converter handles in a small static buffer.
+* **Previews.** Blocks draw an 8 x 8 .. 16 x 16 mip each (one cached texture
+  per wad texture, a few hundred bytes), the texture picker draws 40 px
+  thumbnails from a 32 x 32 mip through a 48 entry LRU cache, and both are
+  released before a compile starts so `qbsp` / `light` / `vis` get that memory
+  instead. `tex wad` in the settings picks the wad; the palette comes from
+  `palette.lmp` next to it.
 * **Screen.** 480 x 272 is the real resolution, not a scaled window, so the
   layout (80 px palette, 160 px properties, 15 x 17 grid) is used as designed.
 * **Memory.** The editor's own 21 objects are ~60 KB of code. The heap is the
   rest of the console's 32 MB (pspsdk's start code takes all of it), and the
   bulk of it goes to tyrutils while a map compiles; a map of the size shipped
-  here compiles to ~443 KB of `.bsp`.
+  here compiles to ~443 KB of `.bsp`. `qbsp` is what grows: measured on the
+  host it is ~7 MB of peak before it hands everything back with
+  `FreeAllMem()` - `light` then adds ~0.3 MB, `vis` ~0.2 MB. The compile window
+  prints the free heap in front of every stage
+  (`STAGE LIGHT - FREE 18342 KB`) and how long the stage took, which is all the
+  information a compile that stops needs.
 * **Draw calls.** Everything on screen is a filled rectangle or a line - the
   text is glyph pixels merged into vertical runs. The editor's own screen is
   about 1 000 of them per frame, the row heavy file browser about 3 800,
@@ -228,7 +239,10 @@ runs from `ms0:/PSP/GAME/KABLUK` and its own paths are relative to that.
 | `cannot find -lSDL2main` / `-lSDL2` | the headers are there but the static libraries are not; the same `psp-pacman -S sdl2` fixes it, `make sdk-info` lists the `.a` files it found |
 | `EBOOT.PBP` builds, screen stays black | the firmware is older than 6.00 (`PSP_FW_VERSION` in the Makefile), or the folder is not `ms0:/PSP/GAME/KABLUK` |
 | starts, then "WAD MISSING" in the editor | pick the wad in the settings, or put it next to `EBOOT.PBP` |
-| the compile stops with an allocation error on a big map | the heap is what is left of the PSP's 32 MB after the screen, the textures and the wad; compile with a smaller wad loaded |
+| the compile stops with an allocation error on a big map | the heap is what is left of the PSP's 32 MB after the screen, the textures and the wad; the `FREE ... KB` line in front of the stage says how much that was. Try a smaller wad or a smaller map |
+| the screen goes dark (or looks switched off) while `LIGHT` runs | normal: light is the slow stage and the backlight timer does not see any button presses. Press a button, or set Settings > Power Save > Backlight Auto-Off to `Off` for long compiles. `LIGHT DONE IN n S` in the log afterwards shows it finished |
+| textures are all grey in the picker and the footer says `NO PALETTE.LMP` | the game palette is not next to the wad - copy `gfx/palette.lmp` (or `palette.lmp`) into the same folder as the `.wad` |
+| the `.bsp` has no textures, although the wad is loaded | fixed in this version: `qbsp` treated `ms0:/...` as a *relative* path and glued it onto the wad folder twice. The compile log now prints `Opened WAD: ms0:/...` when the wad was found |
 
 ## State of this port
 

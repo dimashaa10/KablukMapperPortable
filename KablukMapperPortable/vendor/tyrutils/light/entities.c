@@ -50,6 +50,8 @@ SetKeyValue(entity_t *ent, const char *key, const char *value)
 	    return;
 	}
     ep = malloc(sizeof(*ep));
+    if (!ep)
+	Error("%s: allocation of %d bytes failed\n", __func__, (int)sizeof(*ep));
     ep->next = ent->epairs;
     ent->epairs = ep;
     strcpy(ep->key, key);
@@ -346,6 +348,9 @@ LoadEntities(const bsp2_t *bsp)
 		Error("%s: Value length > %i", __func__, MAX_ENT_VALUE - 1);
 
 	    epair = malloc(sizeof(epair_t));
+	    if (!epair)
+		Error("%s: allocation of %d bytes failed\n", __func__,
+		      (int)sizeof(epair_t));
 	    memset(epair, 0, sizeof(epair_t));
 	    strcpy(epair->key, key);
 	    strcpy(epair->value, com_token);

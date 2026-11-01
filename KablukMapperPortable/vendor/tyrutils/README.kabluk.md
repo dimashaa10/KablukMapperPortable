@@ -111,16 +111,30 @@ Mechanical only; no algorithm was touched.
     purpose: on x64 the single threaded branch is used, and `light`/`vis` are
     called with `-threads 1` either way.
 
-14. **Left as upstream wrote it — `AddLump()` padding** (`common/bspfile.c`).
-    The lump writer does `SafeWrite(data, (size + 3) & ~3)` and then, when
-    `size % 4`, writes `size % 4` more zero bytes. Two consequences: the first
-    call reads up to 3 bytes past the end of the lump buffer, and the offsets
-    of the following lumps are not 4-byte aligned. Neither harms anything -
-    every tool and engine finds a lump through `fileofs`/`filelen` - and the
-    bytes on disk are exactly what this port has always produced, so the code
-    is untouched and documented instead. An AddressSanitizer build reports a
-    heap-buffer-overflow in `SafeWrite` as soon as it compiles a map; that
-    report is this, not a bug in the editor.
+14. **`AddLump()` padding is fixed** (`common/bspfile.c`). Upstream did
+    `SafeWrite(data, (size + 3) & ~3)` and then, when `size % 4`, wrote
+    `size % 4` more zero bytes. The first call read up to three bytes past the
+    end of the lump buffer (AddressSanitizer reported it on every compile: the
+    entities lump is never a multiple of four) and the file got
+    `size + 2 * (size % 4)` bytes for the lump. Now exactly `size` bytes are
+    written and the file is padded to a 4-byte boundary, which is what the
+    offsets assumed all along. Lumps are read through `fileofs`/`filelen`, so
+    the `.bsp` is unchanged for every reader.
+15. **Allocations fail as a log line.** `light` dereferenced three
+    allocations without checking them (`modelinfo` in `light.c`, `tnodes` in
+    `trace.c`, the `epair` in `entities.c`) and `shadowmodels` was only
+    half-guarded; the first two are written to immediately, so a console that
+    ran out of memory died there instead of reporting it. They all `Error()`
+    now, which `bspchain.c` turns back into a failed stage.
+16. **`IsAbsolutePath()` understands device paths** (`qbsp/cmdlib.c`). It only
+    accepted a leading `/` or a `C:`-style drive, so a PSP path
+    (`ms0:/PSP/GAME/KABLUK/quake.wad`) counted as *relative*: the wad name from
+    the worldspawn key was glued onto `-wadpath` a second time, the wad was
+    never opened and every texture vanished from the `.bsp`. A `:` before the
+    first separator now makes a path absolute.
+17. **`vis/soundpvs.c` bounds-checks the texture index.** A face with
+    `miptex == -1` indexed `dataofs[-1]`, which is a read outside the texture
+    lump; the resulting pointer was then handed to `strncasecmp`.
 
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
@@ -130,4 +144,4 @@ MSB8027 complains about. Do not rename or delete qbsp's private copies of
 `cmdlib`/`mathlib`/`file`/`bspfile`: `qbsp/tyr_qbsp_prefix.h` handles the
 symbol clash, the file names have to stay.
 
-Re-syncing with a newer upstream means re-applying these thirteen steps.
+Re-syncing with a newer upstream means re-applying these seventeen steps.

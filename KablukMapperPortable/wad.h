@@ -14,6 +14,12 @@
 #define WAD_KIND_WAD2 2
 #define WAD_KIND_WAD3 3
 
+/* lumpinfo type of a mip texture; everything else (the palette, for one) is
+ * skipped when the texture list is built */
+#define WAD_LUMP_MIPTEX 0x44
+/* miptex header: 16 byte name, width, height, then the four level offsets */
+#define WAD_HEADER_SIZE 40
+
 typedef struct Wad {
     char path[PATH_LEN];
     int opened;
@@ -36,6 +42,14 @@ void wad_close(Wad *wad);
 
 /* Best mip level to use as a small square preview (0..3). */
 int wad_preview_level(const Wad *wad, int index);
+
+/* Smallest mip level (0..3) whose width and height are <= max_size. The
+ * picker asks for a level whose size is close to the cell it draws, so the
+ * thumbnail is scaled by a little instead of by a factor of five. */
+int wad_fit_level(const Wad *wad, int index, int max_size);
+
+/* Longest side of a mip level, for laying a preview out. */
+int wad_mip_size(const Wad *wad, int index, int level);
 
 /* Decompresses one mip level. Returns 1 on success. */
 int wad_read_mip(const Wad *wad, int index, int level, unsigned char *out,

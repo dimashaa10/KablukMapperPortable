@@ -263,6 +263,41 @@ void gfx_blit(Gfx *g, SDL_Texture *texture, int x, int y, int w, int h)
     SDL_RenderCopy(g->renderer, texture, NULL, &dst);
 }
 
+void gfx_blit_fit(Gfx *g, SDL_Texture *texture, int x, int y, int w, int h)
+{
+    unsigned int format = 0;
+    int tex_w = 0;
+    int tex_h = 0;
+    int draw_w;
+    int draw_h;
+
+    if (texture == NULL || w <= 0 || h <= 0) {
+        return;
+    }
+    if (SDL_QueryTexture(texture, &format, NULL, &tex_w, &tex_h) != 0) {
+        return;
+    }
+    if (tex_w <= 0 || tex_h <= 0) {
+        return;
+    }
+
+    /* the limiting side decides the scale, the other one follows it */
+    if (w * tex_h <= h * tex_w) {
+        draw_w = w;
+        draw_h = (w * tex_h) / tex_w;
+    } else {
+        draw_h = h;
+        draw_w = (h * tex_w) / tex_h;
+    }
+    if (draw_w < 1) {
+        draw_w = 1;
+    }
+    if (draw_h < 1) {
+        draw_h = 1;
+    }
+    gfx_blit(g, texture, x + (w - draw_w) / 2, y + (h - draw_h) / 2, draw_w, draw_h);
+}
+
 int gfx_text_width(const char *text, int scale)
 {
     int len = 0;

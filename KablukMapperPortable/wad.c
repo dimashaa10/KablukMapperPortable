@@ -16,8 +16,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define WAD_LUMP_MIPTEX 0x44
-#define WAD_HEADER_SIZE 40 /* miptex header: 16 + 4 + 4 + 16 */
 #define WAD_COMP_MAX 16384
 
 static unsigned int wad_comp[WAD_COMP_MAX];
@@ -103,6 +101,30 @@ static int wad_read_palette_file(Wad *wad, const char *path)
     return 1;
 }
 
+/* Quake lumps were written by tools that were not fussy about case: the same
+ * palette turns up as "palette.lmp", "PALETTE.LMP" and "palette". */
+static int wad_name_is(const char *name, const char *want)
+{
+    int i = 0;
+
+    while (name[i] != '\0' && want[i] != '\0') {
+        char a = name[i];
+        char b = want[i];
+
+        if (a >= 'A' && a <= 'Z') {
+            a = (char)(a - 'A' + 'a');
+        }
+        if (b >= 'A' && b <= 'Z') {
+            b = (char)(b - 'A' + 'a');
+        }
+        if (a != b) {
+            return 0;
+        }
+        i++;
+    }
+    return name[i] == '\0' && want[i] == '\0';
+}
+
 static void wad_find_palette(Wad *wad, const char *dir, const char *lump_name,
                              unsigned int lump_ofs, unsigned int lump_size)
 {
@@ -111,8 +133,9 @@ static void wad_find_palette(Wad *wad, const char *dir, const char *lump_name,
 
     /* 1. a "palette.lmp" lump inside the wad itself */
     if (lump_name != NULL && lump_size == 768) {
-        if (strcmp(lump_name, "palette.lmp") == 0 || strcmp(lump_name, "qpalette") == 0 ||
-            strcmp(lump_name, "palette") == 0) {
+        if (wad_name_is(lump_name, "palette.lmp") ||
+            wad_name_is(lump_name, "qpalette") ||
+            wad_name_is(lump_name, "palette")) {
             FILE *file = fopen(wad->path, "rb");
             if (file != NULL) {
                 if (read_at(file, lump_ofs, wad->palette, 768)) {
@@ -311,6 +334,41 @@ int wad_preview_level(const Wad *wad, int index)
         level++;
     }
     return level;
+}
+
+int wad_fit_level(const Wad *wad, int index, int max_size)
+{
+    int level = 0;
+    int w;
+    int h;
+
+    if (index < 0 || index >= wad->count || max_size <= 0) {
+        return 0;
+    }
+    w = wad->tex_w[index];
+    h = wad->tex_h[index];
+    if (w <= 0 || h <= 0) {
+        return 0;
+    }
+    /* A mip chain is at most four levels deep, and level 3 of a 64x64
+     * texture is 8x8: below that the level would be empty. */
+    while (level < 3 && ((w >> level) > max_size || (h >> level) > max_size)) {
+        level++;
+    }
+    return level;
+}
+
+int wad_mip_size(const Wad *wad, int index, int level)
+{
+    int w;
+    int h;
+
+    if (index < 0 || index >= wad->count || level < 0 || level > 3) {
+        return 0;
+    }
+    w = wad->tex_w[index] >> level;
+    h = wad->tex_h[index] >> level;
+    return w > h ? w : h;
 }
 
 int wad_read_mip(const Wad *wad, int index, int level, unsigned char *out,

@@ -5,6 +5,8 @@
 #                   screen and the file browser (built for the desktop and
 #                   with -D__PSP__ for the PSP paths)
 #   test_input.c  - input.c, with the SDL game controller API faked
+#   test_picker.c - wad.c and the geometry of the texture picker grid, with
+#                   the drawing functions replaced by recording stubs
 #
 # The real sources are compiled against the SDL2 headers that ship in the
 # repository; tests/shim holds the two headers a host build needs to get past
@@ -39,6 +41,13 @@ echo
 echo "== pad translation"
 $cc $flags $inc -o "$work/bin/input" "$root/tests/test_input.c" "$src/input.c"
 "$work/bin/input"
+
+echo
+echo "== wad reader and the texture picker grid"
+$cc $flags $inc -o "$work/bin/picker" \
+    "$root/tests/test_picker.c" "$src/picker.c" "$src/textures.c" "$src/wad.c" \
+    "$src/fgd.c"
+KMP_TEST_CWD="$work/stick" "$work/bin/picker"
 
 echo
 echo "all host tests passed"

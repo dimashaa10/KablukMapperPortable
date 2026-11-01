@@ -377,6 +377,15 @@ static int app_tex_index(const char *name)
     return -1;
 }
 
+/* qbsp, light and vis get the whole heap for a few seconds each, and every
+ * preview texture (plus the picker thumbnails) is a few hundred KB the
+ * compile does not need. They are rebuilt from the wad on demand, so they are
+ * dropped before the tools start - that is memory the light stage can have. */
+static void app_release_previews(void)
+{
+    textures_reset(&app.textures);
+}
+
 /* The menu asked for a keyboard, the texture list, or a save. */
 static void app_handle_menu_request(void)
 {
@@ -413,6 +422,7 @@ static void app_handle_menu_request(void)
         if (compile_is_running(&app.job)) {
             break;
         }
+        app_release_previews();
         compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
                       1);
         break;
@@ -800,6 +810,7 @@ static void app_handle_event(const SDL_Event *event)
         int action = compileui_handle_event(&app.compile_ui, event, &app.job);
 
         if (action == COMPILEUI_COMPILE) {
+            app_release_previews();
             compile_start(&app.job, &app.grid, &app.fgd, &app.settings,
                           &app.wad, 0);
         } else if (action == COMPILEUI_BROWSE) {

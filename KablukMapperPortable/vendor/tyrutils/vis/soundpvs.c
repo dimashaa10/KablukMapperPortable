@@ -108,6 +108,11 @@ CalcAmbientSounds(bsp2_t *bsp)
 	    for (k = 0; k < hit->nummarksurfaces; k++) {
 		surf = &bsp->dfaces[bsp->dmarksurfaces[hit->firstmarksurface + k]];
 		info = &bsp->texinfo[surf->texinfo];
+		/* Kabluk Mapper: a face can point at no texture at all (-1), and
+		 * then dataofs[-1] is a read outside the lump. */
+		if (info->miptex < 0 ||
+		    info->miptex >= bsp->dtexdata.header->nummiptex)
+		    continue;
 		ofs = bsp->dtexdata.header->dataofs[info->miptex];
 		miptex = (const miptex_t *)(bsp->dtexdata.base + ofs);
 

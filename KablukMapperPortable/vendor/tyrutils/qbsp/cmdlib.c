@@ -125,5 +125,22 @@ StripFilename(char *path)
 int
 IsAbsolutePath(const char *path)
 {
-    return path[0] == PATHSEPERATOR || (isalpha(path[0]) && path[1] == ':');
+    const char *p;
+
+    if (path[0] == PATHSEPERATOR || path[0] == '\\')
+	return true;
+
+    /* Kabluk Mapper: the PSP spells absolute paths "ms0:/PSP/GAME/...", so a
+     * drive letter is not the only thing that can come before the separator.
+     * Anything with a ':' before the first separator is absolute: "C:/maps",
+     * "ms0:/PSP/GAME/KABLUK/quake.wad". Without this the wad path from the
+     * worldspawn key was glued onto -wadpath twice on the PSP and every
+     * texture disappeared from the .bsp. */
+    for (p = path; *p != '\0'; p++) {
+	if (*p == PATHSEPERATOR || *p == '\\')
+	    return false;
+	if (*p == ':')
+	    return true;
+    }
+    return false;
 }
