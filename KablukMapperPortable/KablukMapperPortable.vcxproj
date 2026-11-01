@@ -74,9 +74,9 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)TYRUTILS_VERSION=v0.17-kabluk;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\SDL2\include;vendor\tyrutils\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -91,9 +91,9 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)TYRUTILS_VERSION=v0.17-kabluk;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\SDL2\include;vendor\tyrutils\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -108,9 +108,9 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)TYRUTILS_VERSION=v0.17-kabluk;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\SDL2\include;vendor\tyrutils\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -125,9 +125,9 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)TYRUTILS_VERSION=v0.17-kabluk;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>..\SDL2\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\SDL2\include;vendor\tyrutils\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -152,6 +152,41 @@
     <ClCompile Include="fgd.c" />
     <ClCompile Include="wad.c" />
     <ClCompile Include="textures.c" />
+    <ClCompile Include="bspchain.c" />
+    <ClCompile Include="vendor\tyrutils\common\bspfile.c" />
+    <ClCompile Include="vendor\tyrutils\common\cmdlib.c" />
+    <ClCompile Include="vendor\tyrutils\common\log.c" />
+    <ClCompile Include="vendor\tyrutils\common\mathlib.c" />
+    <ClCompile Include="vendor\tyrutils\common\threads.c" />
+    <ClCompile Include="vendor\tyrutils\light\entities.c" />
+    <ClCompile Include="vendor\tyrutils\light\light.c" />
+    <ClCompile Include="vendor\tyrutils\light\litfile.c" />
+    <ClCompile Include="vendor\tyrutils\light\ltface.c" />
+    <ClCompile Include="vendor\tyrutils\light\trace.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\brush.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\bspfile.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\cmdlib.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\csg4.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\file.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\globals.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\map.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\mathlib.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\merge.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\outside.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\parser.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\portals.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\qbsp.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\solidbsp.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\surfaces.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\tjunc.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\util.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\wad.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\winding.c" />
+    <ClCompile Include="vendor\tyrutils\qbsp\writebsp.c" />
+    <ClCompile Include="vendor\tyrutils\vis\flow.c" />
+    <ClCompile Include="vendor\tyrutils\vis\soundpvs.c" />
+    <ClCompile Include="vendor\tyrutils\vis\state.c" />
+    <ClCompile Include="vendor\tyrutils\vis\vis.c" />
     <ClCompile Include="compile.c" />
     <ClCompile Include="compileui.c" />
     <ClCompile Include="picker.c" />
@@ -171,6 +206,25 @@
     <ClInclude Include="fgd.h" />
     <ClInclude Include="wad.h" />
     <ClInclude Include="textures.h" />
+    <ClInclude Include="bspchain.h" />
+    <ClInclude Include="vendor\tyrutils\include\common\bspfile.h" />
+    <ClInclude Include="vendor\tyrutils\include\common\cmdlib.h" />
+    <ClInclude Include="vendor\tyrutils\include\common\log.h" />
+    <ClInclude Include="vendor\tyrutils\include\common\mathlib.h" />
+    <ClInclude Include="vendor\tyrutils\include\common\threads.h" />
+    <ClInclude Include="vendor\tyrutils\include\common\tyr_port.h" />
+    <ClInclude Include="vendor\tyrutils\include\light\entities.h" />
+    <ClInclude Include="vendor\tyrutils\include\light\light.h" />
+    <ClInclude Include="vendor\tyrutils\include\light\litfile.h" />
+    <ClInclude Include="vendor\tyrutils\include\vis\leafbits.h" />
+    <ClInclude Include="vendor\tyrutils\include\vis\vis.h" />
+    <ClInclude Include="vendor\tyrutils\qbsp\bspfile.h" />
+    <ClInclude Include="vendor\tyrutils\qbsp\file.h" />
+    <ClInclude Include="vendor\tyrutils\qbsp\parser.h" />
+    <ClInclude Include="vendor\tyrutils\qbsp\qbsp.h" />
+    <ClInclude Include="vendor\tyrutils\qbsp\tyr_qbsp_prefix.h" />
+    <ClInclude Include="vendor\tyrutils\qbsp\wad.h" />
+    <ClInclude Include="vendor\tyrutils\qbsp\warnerr.h" />
     <ClInclude Include="compile.h" />
     <ClInclude Include="compileui.h" />
     <ClInclude Include="picker.h" />

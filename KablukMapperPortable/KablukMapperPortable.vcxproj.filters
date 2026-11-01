@@ -15,6 +15,14 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <Filter Include="Сторонний код">
+      <UniqueIdentifier>{6f1b1c3a-2f6c-4d2a-9f0c-3a5f0f9a7b21}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Сторонний код\tyrutils">
+      <UniqueIdentifier>{9c2f4c11-7f0d-4c2f-8b6f-1a2b3c4d5e6f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="main.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -53,6 +61,111 @@
     </ClCompile>
     <ClCompile Include="textures.c">
       <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="bspchain.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\common\bspfile.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\common\cmdlib.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\common\log.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\common\mathlib.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\common\threads.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\light\entities.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\light\light.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\light\litfile.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\light\ltface.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\light\trace.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\brush.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\bspfile.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\cmdlib.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\csg4.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\file.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\globals.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\map.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\mathlib.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\merge.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\outside.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\parser.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\portals.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\qbsp.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\solidbsp.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\surfaces.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\tjunc.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\util.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\wad.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\winding.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\qbsp\writebsp.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\vis\flow.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\vis\soundpvs.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\vis\state.c">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClCompile>
+    <ClCompile Include="vendor\tyrutils\vis\vis.c">
+      <Filter>Сторонний код\tyrutils</Filter>
     </ClCompile>
     <ClCompile Include="compile.c">
       <Filter>Source Files</Filter>
@@ -106,6 +219,63 @@
     </ClInclude>
     <ClInclude Include="textures.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="bspchain.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\common\bspfile.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\common\cmdlib.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\common\log.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\common\mathlib.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\common\threads.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\common\tyr_port.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\light\entities.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\light\light.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\light\litfile.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\vis\leafbits.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\include\vis\vis.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\qbsp\bspfile.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\qbsp\file.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\qbsp\parser.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\qbsp\qbsp.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\qbsp\tyr_qbsp_prefix.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\qbsp\wad.h">
+      <Filter>Сторонний код\tyrutils</Filter>
+    </ClInclude>
+    <ClInclude Include="vendor\tyrutils\qbsp\warnerr.h">
+      <Filter>Сторонний код\tyrutils</Filter>
     </ClInclude>
     <ClInclude Include="compile.h">
       <Filter>Header Files</Filter>

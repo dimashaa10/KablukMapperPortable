@@ -5,18 +5,20 @@
  * (no threads, no external tools), one small chunk per frame, so the log
  * window updates while the PSP keeps drawing at 60 fps.
  *
- * What it does today:
+ * The pipeline:
  *   1. counts blocks / entities
  *   2. checks the map is sealed (the shell ring must be intact)
  *   3. writes a standard Quake .map into the output folder
+ *   4. runs the vendored TyrUtils tools on it: qbsp -> light -> vis
  *
- * The .map is the portable middle step: on the desktop it can be fed to
- * qbsp/light/vis, and later a built-in BSP writer can grow out of the same
- * geometry pass.
+ * Steps 1-3 are plain file writing, so they are portable by construction.
+ * Step 4 calls the TyrUtils entry points directly (see bspchain.c) - no
+ * child processes, which is what makes the whole chain work on a PSP.
  */
 #ifndef KMP_COMPILE_H
 #define KMP_COMPILE_H
 
+#include "bspchain.h"
 #include "config.h"
 #include "fgd.h"
 #include "grid.h"
@@ -52,6 +54,10 @@ typedef struct CompileJob {
     int cur_row;
     int cur_col;
     int in_entity_pass;
+
+    BspChain chain; /* qbsp -> light -> vis */
+    int chain_started;
+    int light_entities;
 
     void *file; /* FILE *, hidden so the header stays plain C */
     long bytes;

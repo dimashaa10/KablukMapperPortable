@@ -11,6 +11,16 @@
  */
 #include "compile.h"
 
+/* The chain reports its lines through a single callback (see bspchain.h). */
+static CompileJob *log_target = NULL;
+
+static void chain_line_to_log(const char *line)
+{
+    if (log_target != NULL) {
+        compile_log_add(log_target, line);
+    }
+}
+
 #include <stdio.h>
 #include <string.h>
 
@@ -109,6 +119,11 @@ void compile_init(CompileJob *job)
     job->cur_row = 0;
     job->cur_col = 0;
     job->in_entity_pass = 0;
+    job->chain_started = 0;
+    job->light_entities = 0;
+    job->chain.bsp_bytes = 0;
+    bspchain_init(&job->chain);
+    bspchain_set_log(chain_line_to_log);
     job->file = NULL;
     job->bytes = 0;
 }
@@ -122,6 +137,11 @@ const char *compile_status_text(const CompileJob *job)
 {
     switch (job->state) {
     case COMPILE_RUNNING:
+        /* name the tool while the chain is running */
+        if (job->chain_started && job->chain.stage >= BSPCHAIN_QBSP &&
+            job->chain.stage <= BSPCHAIN_VIS) {
+            return bspchain_stage_name(job->chain.stage);
+        }
         return "COMPILING";
     case COMPILE_DONE:
         return "DONE";
@@ -325,6 +345,9 @@ void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
     }
     cat_str(job->map_path, len, MAP_NAME ".map");
 
+    log_target = job;
+    job->chain_started = 0;
+    job->light_entities = 0;
     compile_log_add(job, "KABLUK MAPPER - MAP COMPILER");
     len = 0;
     len = cat_str(buf, len, "OUTPUT: ");
@@ -344,8 +367,7 @@ static void compile_fail(CompileJob *job, const char *why)
     }
     compile_log_add(job, why);
     compile_log_add(job, "COMPILE ABORTED");
-    job->state = COMPILE_FAILED;
-    job->progress = 0;
+    job->state = COMPILE_FAILED; /* the bar keeps its colour-coded position */
 }
 
 void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
@@ -530,6 +552,9 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
                 if (c == NULL) {
                     continue;
                 }
+                if (strcmp(c->name, "light") == 0) {
+                    job->light_entities++;
+                }
                 len = 0;
                 len = cat_str(buf, len, "// entity ");
                 len = cat_int(buf, len, written + 1);
@@ -544,20 +569,39 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
                 written++;
             }
         }
+        /* light needs at least one light source, otherwise the map is black */
+        if (job->light_entities == 0) {
+            if (written > 0) {
+                len = 0;
+                len = cat_str(buf, len, "// entity ");
+                len = cat_int(buf, len, written + 1);
+                cat_str(buf, len, "\n{\n\"classname\" \"light\"\n");
+            } else {
+                len = 0;
+                len = cat_str(buf, len, "\n// entity 1\n{\n\"classname\" \"light\"\n");
+            }
+            write_text(job, buf);
+            sprintf(buf, "\"origin\" \"%d %d 64\"\n}\n",
+                    MAP_COLS * BLOCK_UNITS / 2, MAP_ROWS * BLOCK_UNITS / 2);
+            write_text(job, buf);
+            written++;
+            compile_log_add(job, "NO LIGHT ENTITY: ADDED A DEFAULT LIGHT");
+        }
+
         job->entity_done = written;
         if (written > 0) {
             len = 0;
             len = cat_str(buf, len, "WROTE ");
             len = cat_int(buf, len, written);
-            cat_str(buf, len, " POINT ENTITIES");
+            cat_str(buf, len, " ENTITIES");
             compile_log_add(job, buf);
         }
-        job->progress = 95;
+        job->progress = 80;
         job->step++;
         break;
     }
 
-    default: { /* close and report */
+    case 6: { /* hand the finished .map to the tool chain */
         FILE *file = (FILE *)job->file;
 
         if (file != NULL) {
@@ -565,16 +609,54 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
             job->file = NULL;
         }
         len = 0;
-        len = cat_str(buf, len, "WROTE ");
+        len = cat_str(buf, len, "MAP WRITTEN: ");
         len = cat_int(buf, len, (int)job->bytes);
-        len = cat_str(buf, len, " BYTES, ");
-        len = cat_int(buf, len, job->brush_total);
-        cat_str(buf, len, " BRUSHES");
+        cat_str(buf, len, " BYTES");
         compile_log_add(job, buf);
-        compile_log_add(job, "MAP EXPORTED - BSP STAGE NOT BUILT IN YET");
+
+        bspchain_setup(&job->chain, job->map_path,
+                       settings != NULL ? settings->wad_path : "");
+        job->chain_started = 1;
+        job->progress = 82;
+        compile_log_add(job, "CHAIN: QBSP LIGHT VIS");
+        job->step++;
+        break;
+    }
+
+    case 7: { /* one tool per frame: qbsp, then light, then vis */
+        int before = job->chain.stage;
+
+        if (before != BSPCHAIN_DONE && before != BSPCHAIN_FAILED) {
+            len = 0;
+            len = cat_str(buf, len, "STAGE ");
+            cat_str(buf, len, bspchain_stage_name(before));
+            compile_log_add(job, buf);
+        }
+
+        if (bspchain_run_stage(&job->chain)) {
+            job->progress = 82 + (job->chain.stage - 1) * 5;
+            break;
+        }
+
+        if (job->chain.stage == BSPCHAIN_FAILED) {
+            compile_fail(job, "TOOL CHAIN STOPPED - SEE LOG ABOVE");
+            break;
+        }
+
+        len = 0;
+        len = cat_str(buf, len, "BSP READY: ");
+        len = cat_int(buf, len, (int)job->chain.bsp_bytes);
+        cat_str(buf, len, " BYTES");
+        compile_log_add(job, buf);
+        compile_log_add(job, "MAP COMPILED - READY TO PLAY");
         job->progress = 100;
         job->state = COMPILE_DONE;
         job->step++;
+        break;
+    }
+
+    default: {
+        /* nothing left to do - the job stays in its finished state */
         break;
     }
     }
