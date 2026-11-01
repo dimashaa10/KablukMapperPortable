@@ -351,8 +351,7 @@ static const char *brush_texture(const Grid *grid, const Wad *wad, int cx,
 /* Job                                                                 */
 /* ------------------------------------------------------------------ */
 void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                   const Settings *settings, const Wad *wad,
-                   const ValueStore *values)
+                   const Settings *settings, const Wad *wad)
 {
     char buf[COMPILE_LOG_LEN];
     int len;

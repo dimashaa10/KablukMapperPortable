@@ -94,6 +94,15 @@ Mechanical only; no algorithm was touched.
     and `vis/vis.c` (`LeafFlow`) sizes the RLE buffer of `CompressRow()` from
     the byte count instead of `portalleafs * 2 / 8`, which was one byte short
     for leaf counts like 12.
+13. **Windows is `_WIN32`, not `WIN32`** — `common/cmdlib.c` guarded `direct.h`,
+    `Q_getwd()` and `Q_mkdir()` with `#ifdef WIN32`, which an **x64** MSVC build
+    does not define (it sets `_WIN32` only), so `Q_getwd()` compiled down to a
+    call to POSIX `getwd()` and the link failed with LNK2019. The guards are
+    `#if defined(WIN32) || defined(_WIN32)` now, and the POSIX fallback uses
+    `getcwd()` + `unistd.h` instead of the deprecated `getwd()` (which GCC and
+    MinGW warn about at link time). `common/threads.c` keeps its `WIN32` test on
+    purpose: on x64 the single threaded branch is used, and `light`/`vis` are
+    called with `-threads 1` either way.
 
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
@@ -103,4 +112,4 @@ MSB8027 complains about. Do not rename or delete qbsp's private copies of
 `cmdlib`/`mathlib`/`file`/`bspfile`: `qbsp/tyr_qbsp_prefix.h` handles the
 symbol clash, the file names have to stay.
 
-Re-syncing with a newer upstream means re-applying these twelve steps.
+Re-syncing with a newer upstream means re-applying these thirteen steps.

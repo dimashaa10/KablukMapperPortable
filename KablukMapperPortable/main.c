@@ -432,8 +432,8 @@ static void app_handle_event(const SDL_Event *event)
         int action = compileui_handle_event(&app.compile_ui, event, &app.job);
 
         if (action == COMPILEUI_COMPILE) {
-            compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
-                          &app.values);
+            compile_start(&app.job, &app.grid, &app.fgd, &app.settings,
+                          &app.wad);
         } else if (action == COMPILEUI_BROWSE) {
             menu_open_browse(&app.menu, BROWSE_DIR, MENU_CLOSED);
         } else if (action == COMPILEUI_CLOSE) {

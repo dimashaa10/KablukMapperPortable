@@ -24,8 +24,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#ifdef WIN32
+/* MSVC on x64 defines _WIN32 but not WIN32, and has no POSIX getwd() */
+#if defined(WIN32) || defined(_WIN32)
 #include <direct.h>
+#else
+#include <unistd.h> /* getcwd(): the old getwd() is deprecated everywhere */
 #endif
 
 #ifdef NeXT
@@ -33,9 +36,6 @@
 #endif
 
 #ifdef LINUX
-#if !defined(_WIN32)
-#include <unistd.h>
-#endif
 #include <string.h>
 #endif
 
@@ -196,7 +196,7 @@ I_FloatTime(void)
 void
 Q_getwd(char *out)
 {
-#ifdef WIN32
+#if defined(WIN32) || defined(_WIN32)
     _getcwd(out, 256);
     strcat(out, "\\");
 #else
@@ -215,7 +215,9 @@ Q_getwd(char *out)
     strcpy(out, pwd);
 
 #else
-    getwd(out);
+    if (getcwd(out, 256) == NULL)
+	Error("Couldn't get working directory: %s", strerror(errno));
+    strcat(out, "/");
 #endif
 #endif
 }
@@ -223,7 +225,7 @@ Q_getwd(char *out)
 void
 Q_mkdir(const char *path)
 {
-#ifdef WIN32
+#if defined(WIN32) || defined(_WIN32)
     if (_mkdir(path) != -1)
 	return;
 #else

@@ -3,7 +3,9 @@
  *
  * Directory listing + tiny path helpers for the file browser.
  */
-#define _CRT_SECURE_NO_WARNINGS
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS /* also defined by the project (C4005) */
+#endif
 
 #include "fs.h"
 

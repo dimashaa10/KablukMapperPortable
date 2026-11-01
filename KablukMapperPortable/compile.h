@@ -74,10 +74,10 @@ void compile_init(CompileJob *job);
 int compile_is_running(const CompileJob *job);
 const char *compile_status_text(const CompileJob *job);
 
-/* Clears the log and starts over. */
+/* Clears the log and starts over. The values the user typed are handed to
+ * compile_step, which is where the .map gets written. */
 void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
-                   const Settings *settings, const Wad *wad,
-                   const ValueStore *values);
+                   const Settings *settings, const Wad *wad);
 
 /* Advances the job by one chunk; call once per frame while it runs. */
 void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
