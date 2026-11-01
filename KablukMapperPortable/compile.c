@@ -630,13 +630,20 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
             write_text(job, settings->wad_path);
             write_text(job, "\"\n");
         }
+        /* "message" is the name the engine lists the level under. It is
+         * optional: an empty (or unset) message writes no key at all. */
         {
             const char *msg = values_get(values, VALUES_WORLD_CX,
                                          VALUES_WORLD_CY, "message");
 
-            write_text(job, "\"message\" \"");
-            write_text(job, msg != NULL ? msg : DEFAULT_MAP_MESSAGE);
-            write_text(job, "\"\n");
+            if (msg == NULL || msg[0] == '\0') {
+                msg = DEFAULT_MAP_MESSAGE;
+            }
+            if (msg[0] != '\0') {
+                write_text(job, "\"message\" \"");
+                write_text(job, msg);
+                write_text(job, "\"\n");
+            }
         }
         /* worldspawn "light" is the map-wide minimum light (minlight in the
          * light tool), so a map is never black even without light entities.

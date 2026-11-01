@@ -97,8 +97,10 @@ static void app_seed_defaults(void)
 
     sprintf(text, "%d", DEFAULT_MINLIGHT);
     values_set(&app.values, VALUES_WORLD_CX, VALUES_WORLD_CY, "light", text);
-    values_set(&app.values, VALUES_WORLD_CX, VALUES_WORLD_CY, "message",
-               DEFAULT_MAP_MESSAGE);
+    if (DEFAULT_MAP_MESSAGE[0] != '\0') {
+        values_set(&app.values, VALUES_WORLD_CX, VALUES_WORLD_CY, "message",
+                   DEFAULT_MAP_MESSAGE);
+    }
 }
 
 static void app_refresh_layout(void)

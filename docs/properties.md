@@ -80,7 +80,6 @@ block per point entity:
 ```
 {
 "classname" "worldspawn"
-"message" "Kabluk map"
 "light" "250"
 }
 {
@@ -94,7 +93,10 @@ block per point entity:
 * `classname` and `origin` are computed by the editor and never taken from the
   pool; `origin` is `cell*128 - 2048 + 64` with `z` 24.
 * only what you typed is written — an untouched row falls back to the `.fgd`
-  default in the panel, and is not exported at all.
+  default in the panel, and is not exported at all;
+* worldspawn's `message` (the name the engine lists the level under) is
+  optional and empty by default: type one and the `.map` gets the key, leave
+  the row empty and no `message` line is written.
 * worldspawn's `light` is the map wide minlight the `light` tool reads (see
   `compile-chain.md`); the editor seeds it with `DEFAULT_MINLIGHT` (200) when
   the map is new, and from then on the row is yours.
