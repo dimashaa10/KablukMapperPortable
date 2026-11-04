@@ -40,6 +40,13 @@
 /* Set by the editor, NULL when the tools run stand-alone. */
 extern void (*tyr_log_hook)(const char *text);
 
+/* A breadcrumb channel of its own, next to the log: the editor points this at
+ * kabluk-phase.txt, which is written one line at a time with its own open and
+ * close, so it survives a console that dies inside the logging itself. The
+ * tools call it around every call they cannot reason about (a malloc, a read,
+ * a close). NULL when the tools run stand-alone. */
+extern void (*tyr_phase_hook)(const char *step);
+
 /* Never returns when the editor is driving (longjmps back to bspchain.c). */
 void tyr_fatal_exit(void) TYR_NORETURN_ATTR;
 

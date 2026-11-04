@@ -1121,9 +1121,17 @@ LoadBSPFile(const char *filename, bspdata_t *bspdata)
     /* load the file header */
     LoadFile(filename, &header);
 
+    /* Kabluk Mapper: the phase file gets a line here as well, so a console that
+     * dies before the version line can be told apart from one that dies while
+     * printing it. */
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("bsp: loaded");
+
     /* check the file version */
     header->version = LittleLong(header->version);
     logprint("BSP is version %s\n", BSPVersionString(header->version));
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("bsp: version logged");
     if (!BSPVersionSupported(header->version))
 	Error("Sorry, this bsp version is not supported.");
 
@@ -1204,8 +1212,13 @@ LoadBSPFile(const char *filename, bspdata_t *bspdata)
 	bsp->entdatasize = CopyLump(header, LUMP_ENTITIES, &bsp->dentdata);
     }
 
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("bsp: lumps copied");
+
     /* everything has been copied out */
     free(header);
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("bsp: header freed");
 
     /* swap everything */
     SwapBSPFile(bspdata, TO_CPU);

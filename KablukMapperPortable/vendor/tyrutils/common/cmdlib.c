@@ -544,6 +544,16 @@ Sys_LoadedFileSize(void)
  * so the read cannot fail that way at all, and each call leaves a line of its
  * own behind in case one of them does.
  */
+/* Kabluk Mapper: a step the phase file keeps, for the loads big enough to be
+ * worth it. The log says a line at a time; this says the same thing through a
+ * file that is opened, appended and closed on its own, so the two disagree
+ * when the death is inside the logging. */
+static void load_phase(const char *step)
+{
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook(step);
+}
+
 int
 LoadFile(const char *filename, void *destptr)
 {
@@ -553,6 +563,7 @@ LoadFile(const char *filename, void *destptr)
     int length;
     int offset;
 
+    load_phase("load: open");
     handle = kmp_open(filename, KMP_OPEN_FLAGS);
     if (handle < 0)
 	Error("%s: cannot open %s", __func__, filename);
@@ -572,6 +583,7 @@ LoadFile(const char *filename, void *destptr)
      * (allocate, read, close) say so before they run. */
     logprint("%s is %d bytes, %d KB free\n", filename, length, tyr_free_kb());
     logprint("---- allocating %d bytes ----\n", length);
+    load_phase("load: alloc");
     buffer = *bufferptr = malloc((size_t)length + 1);
     if (!buffer) {
 	kmp_close(handle);
@@ -581,6 +593,7 @@ LoadFile(const char *filename, void *destptr)
 
     /* Kabluk Mapper: a single read() can come back short on the memory stick,
      * and the old fread() check was the only thing that noticed. */
+    load_phase("load: read");
     offset = 0;
     while (offset < length) {
 	int got = (int)kmp_read(handle, buffer + offset, (size_t)(length - offset));
@@ -591,6 +604,7 @@ LoadFile(const char *filename, void *destptr)
     }
     logprint("---- read %d of %d bytes (%d KB free) ----\n", offset, length,
 	     tyr_free_kb());
+    load_phase("load: read ok");
     if (offset != length) {
 	kmp_close(handle);
 	*bufferptr = NULL;
@@ -599,10 +613,15 @@ LoadFile(const char *filename, void *destptr)
 	Error("%s: %s stopped at %d of %d bytes", __func__, filename, offset,
 	      length);
     }
+    load_phase("load: close");
     kmp_close(handle);
+    load_phase("load: closed");
     logprint("---- closed ----\n");
+    load_phase("load: closed logged");
     buffer[length] = 0;
+    load_phase("load: terminated");
     logprint("---- loaded ----\n");
+    load_phase("load: done");
 
     return length;
 }

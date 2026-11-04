@@ -373,6 +373,8 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
      * the light stage leaves nothing else behind - the log file stops at the
      * last line that was printed, and this says which call it was in. */
     logprint("%d thread(s), loading %s\n", numthreads, source);
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("light: load");
     LoadBSPFile(source, &bspdata);
     logprint("---- bsp loaded ----\n");
 
@@ -387,6 +389,8 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
     MakeTnodes(bsp);
     logprint("---- bsp tree copied ----\n");
 
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("light: light world");
     modelinfo = malloc(bsp->nummodels * sizeof(*modelinfo));
     if (!modelinfo)
 	Error("%s: allocation of %d bytes failed\n", __func__,
@@ -396,6 +400,8 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
 
     LightWorld(bsp);
     free(modelinfo);
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("light: lightmaps done");
     logprint("---- lightmaps written ----\n");
 
     WriteEntitiesToString(bsp);
@@ -408,6 +414,8 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
         if (loadversion != BSP2VERSION)
             ConvertBSPFormat(loadversion, &bspdata);
 
+        if (tyr_phase_hook != NULL)
+	    tyr_phase_hook("light: write bsp");
         WriteBSPFile(source, &bspdata);
     }
 
@@ -415,6 +423,8 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
     logprint("%5.1f seconds elapsed\n", end - start);
 
     UnloadBSPFile(&bspdata); /* Kabluk Mapper: the editor compiles again */
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook("light: done");
     close_log();
 
     return 0;

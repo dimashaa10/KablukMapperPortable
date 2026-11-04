@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "crash.h" /* the tools' breadcrumbs share kabluk-phase.txt */
 #include "fs.h"
 
 /* The tools keep their main(), renamed by vendor/tyrutils/include/common/tyr_port.h */
@@ -19,6 +20,16 @@ int tyr_vis_main(int argc, char **argv);
 
 /* Declared in vendor/tyrutils/include/common/tyr_port.h */
 void (*tyr_log_hook)(const char *text) = NULL;
+void (*tyr_phase_hook)(const char *step) = NULL;
+
+/* The tools' breadcrumbs land in the same file as the editor's: it is written
+ * with its own open/append/close per line, so it survives a console that dies
+ * while a log line is being written - which is what the last three logs
+ * looked like. */
+static void chain_phase(const char *step)
+{
+    crash_step(step);
+}
 
 #if defined(KMP_HAVE_PSP) || defined(__PSP__)
 #include <pspkernel.h> /* sceKernelMaxFreeMemSize */
@@ -32,7 +43,8 @@ void (*tyr_log_hook)(const char *text) = NULL;
  * everybody else, so once the editor has started this is 512 and it does not
  * move. If it ever reads like the whole partition (tens of megabytes) the heap
  * block could not be created at all and every malloc fails. The real budget is
- * printed once at startup, in SDL_Log.txt ("user memory before startup"). */
+ * printed once at startup, in SDL_Log.txt ("partition free at startup"), and
+ * 512 there is the normal reading - see the note in main.c. */
 int tyr_free_kb(void)
 {
 #if defined(KMP_HAVE_PSP) || defined(__PSP__)
@@ -256,6 +268,7 @@ void bspchain_init(BspChain *chain)
     chain->bsp_bytes = 0;
     chain_line_len = 0;
     tyr_log_hook = chain_line_add;
+    tyr_phase_hook = chain_phase;
 }
 
 void bspchain_setup(BspChain *chain, const char *map_path, const char *wad_path)

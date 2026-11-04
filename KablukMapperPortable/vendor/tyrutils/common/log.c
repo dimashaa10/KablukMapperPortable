@@ -70,8 +70,17 @@ logvprint_locked__(const char *fmt, va_list args)
 	va_end(log_args);
 	tyr_log_hook(buf);
     }
+#ifndef __PSP__
+    /* Kabluk Mapper: a PSP EBOOT has no console. stdout is a TTY nobody reads,
+     * and a write to it is the one call in this function the program cannot
+     * reason about: it costs a second formatting pass and a few kilobytes of
+     * stack, and a TTY whose buffer stops being drained blocks the caller -
+     * which on a console that is mid compile looks exactly like the crash we
+     * were chasing. The tools' own log file and the editor's hook already
+     * carry every line. */
     vprintf(fmt, args);
     fflush(stdout);
+#endif
 }
 
 void

@@ -222,11 +222,10 @@ only sees button presses. Press a button, or turn Backlight Auto-Off off in
 the PSP's power save settings. The `LIGHT DONE IN n S` line afterwards says
 the stage finished.
 
-## When the console dies mid compile: read the two files
+## When the console dies mid compile: read the files
 
 The compile window's text lives in RAM, so a console that powers off loses it.
-Both halves of a compile also write to disk, and those two files survive and
-say how far it got:
+Three files on the memory stick survive it and say how far it got:
 
 * **`<out dir>/compile.log`** - a copy of the window's log, one line per
   `compile_log_add()` call, flushed every line. The editor's own view of the
@@ -271,7 +270,11 @@ header was read, and the six lines after it name the call: `---- allocating`,
 `---- allocated, reading ----`, `---- read N of M bytes ----`, `---- closed`,
 `---- loaded`, then `BSP is version 29`. One that stops at `BSP is version 29`
 died inside the lump copy; one that stops at `---- lighting N faces ----` died
-in the lighting itself. Every one of those has a message in front of it when
+in the lighting itself.
+
+Careful with the last one of those: a log always ends at the last line that was
+*fully written*, so "stops after X" means "died in X or in the call after X".
+The phase file below is what separates the two. Every one of those has a message in front of it when
 the cause is something the tools can see (a missing file, a full memory stick,
 a cut-off bsp), so a log cut off *without* a message is the signature of an
 exception or of a kill.
@@ -303,16 +306,76 @@ block was never created and every `malloc()` fails - but the budget the
 editor and the tools share is printed once, by the editor, into its own log:
 
 ```
-INFO: user memory before startup: 24064 KB
+INFO: partition free at startup: 512 KB
 ```
 
-That is the whole user partition, read before `SDL_Init()` takes its share.
-Everything the tools can spend is that number minus the 512 KB reserve.
+Read it as a warning light, not as the budget: 512 there is normal - newlib's
+own startup allocates before `main`, so the heap block already exists and what
+is left over is the reserve. The number is only interesting when it reads like
+the whole partition (tens of megabytes): that means the heap block could not be
+created and every `malloc()` is going to fail. A user EBOOT cannot query the
+size of the block it got.
 
 Both logs are written per line, and the tool's own log is written **before**
 the editor's hook (see `logvprint_locked__()` in `common/log.c`). So if the two
 disagree - `light.log` has a line that `<out dir>/compile.log` does not - the
 console died inside the editor's log hook, not inside the tool.
+
+### A third file: `kabluk-phase.txt` gets the tools' steps too
+
+Both of those files are written *by the logging*, so a console that dies inside
+a log line leaves them looking exactly like a console that died just after one.
+The phase file does not have that problem: every line is a separate open,
+append, flush and close, so it survives whatever the logging is doing.
+
+The tools therefore have a breadcrumb channel of their own
+(`tyr_phase_hook`, pointed at `crash_step()`), and it names each call they
+cannot reason about:
+
+```
+compile step 7
+load: open
+load: alloc
+load: read
+load: read ok
+load: close
+load: closed
+load: closed logged
+load: terminated
+load: done
+bsp: loaded
+bsp: version logged
+light: light world
+light: lightmaps done
+light: write bsp
+light: done
+```
+
+Read the last line and the log together:
+
+| phase ends at | the log has | what died |
+| --- | --- | --- |
+| `load: read` | `---- allocated, reading ----` | the `read()` itself |
+| `load: read ok` | `---- read N of M bytes ----` | the log line for the read |
+| `load: close` | the same | the `close()` of the file |
+| `load: closed` | the same | the log line after the close |
+| `bsp: loaded` | `---- read ... ----` | the log line, again |
+| `bsp: version logged` | `BSP is version 29` | the lump copy |
+| `light: light world` | `---- lighting N faces ----` | the lighting |
+
+That also settles the question the two logs cannot answer on their own: a
+console that stops at the same spot in both files may have died *after* the
+last line, in the call the next line would have named.
+
+### No console, no stdout
+
+A PSP EBOOT has nothing attached to `stdout` - it is a TTY handle that nobody
+drains. `logvprint_locked__()` no longer writes to it at all on the PSP
+(`#ifndef __PSP__`): the write costs a second formatting pass and a few
+kilobytes of stack, and a TTY that stops being drained blocks its writer, which
+mid compile is indistinguishable from the crash being chased. The tool's own
+log and the editor's hook already carry every line; the desktop and the Windows
+build keep `printf` output as before.
 
 The lump copy is checked now: a `.bsp` whose lumps point past the end of the
 file (truncated by a full stick, or read while it was still being written) is

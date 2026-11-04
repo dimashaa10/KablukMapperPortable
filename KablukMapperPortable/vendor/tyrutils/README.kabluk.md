@@ -179,8 +179,10 @@ Mechanical only; no algorithm was touched.
     (`include/common/tyr_port.h`, `bspchain.c`). pspdev's `malloc` takes one
     partition block at the first allocation and leaves a fixed 512 KB behind,
     so the number printed next to every load is 512 for the whole session and
-    says nothing about the heap. The editor prints the real budget once:
-    `user memory before startup: N KB`, read before `SDL_Init()`.
+    says nothing about the heap. The editor prints `partition free at
+    startup: N KB` before `SDL_Init()`; 512 there is normal (newlib allocates
+    before `main`, so the block already exists), tens of megabytes means the
+    block was never created.
 25. **`vis` sizes the visibility buffer from the map** (`vis/vis.c`,
     `LoadPortals()`). Upstream allocates `MAX_MAP_VISIBILITY` (16 MB) and
     `memset`s it for every map, whatever the map needs; on the PSP that is most
@@ -190,6 +192,17 @@ Mechanical only; no algorithm was touched.
     slack per leaf), and the old ceiling still caps it. A 144 brush map drops
     from 16 777 216 bytes to 36, and the `.bsp` is byte for byte identical.
 
+26. **The tools get a phase breadcrumb channel, and the PSP build has no
+    stdout** (`include/common/tyr_port.h`, `common/log.c`, and call sites in
+    `common/cmdlib.c`, `common/bspfile.c`, `light/light.c`). `tyr_phase_hook`
+    appends `load: open`, `load: alloc`, `load: read`, `load: close`,
+    `bsp: loaded`, `light: light world` and so on to the editor's
+    `kabluk-phase.txt`, which is written one line at a time with its own
+    open/close - so it survives a console that dies *inside* a log line, which
+    the two log files by definition cannot show. `logvprint_locked__()` also
+    stops writing to `stdout` under `__PSP__`: an EBOOT's stdout is a TTY with
+    no reader, and a blocked TTY write looks exactly like a crash.
+
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
 basenames that exist twice — `bspfile.c`, `cmdlib.c`, `mathlib.c`, once in
@@ -198,4 +211,4 @@ MSB8027 complains about. Do not rename or delete qbsp's private copies of
 `cmdlib`/`mathlib`/`file`/`bspfile`: `qbsp/tyr_qbsp_prefix.h` handles the
 symbol clash, the file names have to stay.
 
-Re-syncing with a newer upstream means re-applying these twenty-five steps.
+Re-syncing with a newer upstream means re-applying these twenty-six steps.
