@@ -164,6 +164,50 @@ typedef struct {
 } lightmap_t;
 
 /*
+ * Kabluk Mapper: a lightsurf_t is 62 KB and a lightmap_t is 81 KB, and
+ * upstream keeps five of the maps plus the surf on the stack - a 477 120 byte
+ * frame in LightFace(). The PSP gives the main thread 256 KB of stack (see
+ * DEFAULT_THREAD_STACK_KB_SIZE in pspsdk's crt0.c), so the very first face of
+ * the very first map overran it by 200 KB and took the console with it, with
+ * nothing in any log to say why.
+ *
+ * They live in one heap block for the whole stage now, reused by every face.
+ * The tools run with a single thread - common/threads.c is compiled without
+ * HAVE_THREADS and the editor passes -threads 1 to all of them - so there is
+ * nobody to fight over the block.
+ */
+typedef struct {
+    lightsurf_t surf;
+    lightmap_t maps[MAXLIGHTMAPS + 1];
+} lightwork_t;
+
+static lightwork_t *lightwork;
+static lightmap_t *lightwork_soft;
+
+static lightwork_t *
+Lightwork_Get(void)
+{
+    if (lightwork == NULL) {
+	lightwork = malloc(sizeof(*lightwork));
+	if (lightwork == NULL)
+	    Error("%s: allocation of %d bytes failed", __func__,
+		  (int)sizeof(*lightwork));
+    }
+    return lightwork;
+}
+
+/* The editor runs the tools inside its own process, so a stage that leaves
+ * half a megabyte behind is a stage the next compile cannot have. */
+void
+Lightwork_Free(void)
+{
+    free(lightwork);
+    lightwork = NULL;
+    free(lightwork_soft);
+    lightwork_soft = NULL;
+}
+
+/*
  * Functions to aid in calculation of polygon centroid
  */
 static void
@@ -515,11 +559,11 @@ int
 FaceLightmapSamples(const bsp2_dface_t *face, const vec3_t offset,
                     const bsp2_t *bsp)
 {
-    lightsurf_t surf;
+    lightsurf_t *surf = &Lightwork_Get()->surf;
 
-    memset(&surf, 0, sizeof(surf));
-    CalcFaceExtents(face, offset, bsp, &surf);
-    return (surf.texsize[0] + 1) * (surf.texsize[1] + 1);
+    memset(surf, 0, sizeof(*surf));
+    CalcFaceExtents(face, offset, bsp, surf);
+    return (surf->texsize[0] + 1) * (surf->texsize[1] + 1);
 }
 
 TYR_NOINLINE
@@ -628,14 +672,24 @@ Lightmap_Soften(lightmap_t *lightmap, const lightsurf_t *lightsurf)
     int s, t, starts, startt, ends, endt;
     const lightsample_t *src;
     lightsample_t *dst;
-    lightmap_t softmap;
+    lightmap_t *softmap;
 
     const int width = (lightsurf->texsize[0] + 1) * oversample;
     const int height = (lightsurf->texsize[1] + 1) * oversample;
     const int fullsamples = (2 * softsamples + 1) * (2 * softsamples + 1);
 
-    memset(&softmap, 0, sizeof(softmap));
-    dst = softmap.samples;
+    /* Kabluk Mapper: 81 KB is more than the PSP's stack can spare in a frame
+     * that is already called from the face loop (see lightwork_t above). */
+    if (lightwork_soft == NULL) {
+	lightwork_soft = malloc(sizeof(*lightwork_soft));
+	if (lightwork_soft == NULL)
+	    Error("%s: allocation of %d bytes failed", __func__,
+		  (int)sizeof(*lightwork_soft));
+    }
+    softmap = lightwork_soft;
+
+    memset(softmap, 0, sizeof(*softmap));
+    dst = softmap->samples;
     for (i = 0; i < lightsurf->numpoints; i++, dst++) {
 	startt = qmax((i / width) - softsamples, 0);
 	endt = qmin((i / width) + softsamples + 1, height);
@@ -667,8 +721,8 @@ Lightmap_Soften(lightmap_t *lightmap, const lightsurf_t *lightsurf)
 	VectorScale(dst->color, 1.0 / samples, dst->color);
     }
 
-    softmap.style = lightmap->style;
-    memcpy(lightmap, &softmap, sizeof(softmap));
+    softmap->style = lightmap->style;
+    memcpy(lightmap, softmap, sizeof(*softmap));
 }
 
 
@@ -1008,10 +1062,11 @@ LightFace(bsp2_dface_t *face, const modelinfo_t *modelinfo,
     int i, j, k;
     const entity_t *entity;
     lightsample_t *sample;
-    lightsurf_t lightsurf;
+    lightwork_t *work = Lightwork_Get();
+    lightsurf_t *surf = &work->surf;
 
     /* One extra lightmap is allocated to simplify handling overflow */
-    lightmap_t lightmaps[MAXLIGHTMAPS + 1];
+    lightmap_t *lightmaps = work->maps;
 
     /* some surfaces don't need lightmaps */
     if (!litfile_only) {
@@ -1022,7 +1077,7 @@ LightFace(bsp2_dface_t *face, const modelinfo_t *modelinfo,
     if (bsp->texinfo[face->texinfo].flags & TEX_SPECIAL)
         return;
 
-    Lightsurf_Init(modelinfo, face, bsp, &lightsurf, oversample);
+    Lightsurf_Init(modelinfo, face, bsp, surf, oversample);
     Lightmaps_Init(lightmaps, MAXLIGHTMAPS + 1, face);
 
     /*
@@ -1036,33 +1091,33 @@ LightFace(bsp2_dface_t *face, const modelinfo_t *modelinfo,
 	if (entity->formula == LF_LOCALMIN)
 	    continue;
 	if (entity->light.light > 0)
-	    LightFace_Entity(entity, &entity->light, &lightsurf, lightmaps);
+	    LightFace_Entity(entity, &entity->light, surf, lightmaps);
     }
     if (sunlight.light > 0)
-	LightFace_Sky(&sunlight, sunvec, &lightsurf, lightmaps);
+	LightFace_Sky(&sunlight, sunvec, surf, lightmaps);
 
     /* minlight - Use the greater of global or model minlight. */
     if (modelinfo->minlight.light > minlight.light)
-	LightFace_Min(&modelinfo->minlight, &lightsurf, lightmaps);
+	LightFace_Min(&modelinfo->minlight, surf, lightmaps);
     else
-	LightFace_Min(&minlight, &lightsurf, lightmaps);
+	LightFace_Min(&minlight, surf, lightmaps);
 
     /* negative lights */
     for (i = 0, entity = entities; i < num_entities; i++, entity++) {
 	if (entity->formula == LF_LOCALMIN)
 	    continue;
 	if (entity->light.light < 0)
-	    LightFace_Entity(entity, &entity->light, &lightsurf, lightmaps);
+	    LightFace_Entity(entity, &entity->light, surf, lightmaps);
     }
     if (sunlight.light < 0)
-	LightFace_Sky(&sunlight, sunvec, &lightsurf, lightmaps);
+	LightFace_Sky(&sunlight, sunvec, surf, lightmaps);
 
     /* Fix any negative values */
     for (i = 0; i < MAXLIGHTMAPS; i++) {
 	if (lightmaps[i].style == 255)
 	    break;
 	sample = lightmaps[i].samples;
-	for (j = 0; j < lightsurf.numpoints; j++, sample++) {
+	for (j = 0; j < surf->numpoints; j++, sample++) {
 	    if (sample->light < 0)
 		sample->light = 0;
 	    for (k = 0; k < 3; k++) {
@@ -1078,9 +1133,9 @@ LightFace(bsp2_dface_t *face, const modelinfo_t *modelinfo,
 	for (i = 0; i < MAXLIGHTMAPS; i++) {
 	    if (lightmaps[i].style == 255)
 		break;
-	    Lightmap_Soften(&lightmaps[i], &lightsurf);
+	    Lightmap_Soften(&lightmaps[i], surf);
 	}
     }
 
-    WriteLightmaps(face, &lightsurf, lightmaps);
+    WriteLightmaps(face, surf, lightmaps);
 }

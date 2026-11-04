@@ -208,6 +208,20 @@ Mechanical only; no algorithm was touched.
     is where the console was dying, in a window of four calls between two log
     lines that both said nothing about them.
 
+27. **The light stage's scratch buffers move off the stack** (`light/ltface.c`,
+    `light/light.h`, `light/light.c`). Upstream keeps five `lightmap_t` (81 KB
+    each) and one `lightsurf_t` (62 KB) as locals in `LightFace()`: a 477 120
+    byte frame. The PSP's main thread gets 256 KB, so the first face of the
+    first map walked off the stack and the console went with it, silently, at
+    `light: face 0`. They are one heap block now (`lightwork_t`, `Lightwork_Get()`,
+    `Lightwork_Free()` at the end of the stage), reused for every face, and
+    `Lightmap_Soften()`'s own 81 KB local and `FaceLightmapSamples()`'s 62 KB
+    one moved with them. No frame in `ltface.c` is over 176 bytes now;
+    `LoadBrush()` in qbsp at 69 744 is the largest left in the tools. One
+    thread is assumed (`HAVE_THREADS` is never defined and the editor passes
+    `-threads 1`) - that is what makes a single shared block safe. The compiled
+    `.bsp` is byte for byte what it was before the move.
+
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
 basenames that exist twice — `bspfile.c`, `cmdlib.c`, `mathlib.c`, once in
@@ -216,4 +230,4 @@ MSB8027 complains about. Do not rename or delete qbsp's private copies of
 `cmdlib`/`mathlib`/`file`/`bspfile`: `qbsp/tyr_qbsp_prefix.h` handles the
 symbol clash, the file names have to stay.
 
-Re-syncing with a newer upstream means re-applying these twenty-six steps.
+Re-syncing with a newer upstream means re-applying these twenty-seven steps.

@@ -455,6 +455,7 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
     logprint("%5.1f seconds elapsed\n", end - start);
 
     UnloadBSPFile(&bspdata); /* Kabluk Mapper: the editor compiles again */
+    Lightwork_Free();
     if (tyr_phase_hook != NULL)
 	tyr_phase_hook("light: done");
     close_log();

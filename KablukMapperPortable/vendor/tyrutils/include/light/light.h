@@ -92,6 +92,11 @@ void LightFace(bsp2_dface_t *face, const modelinfo_t *modelinfo,
 	       const bsp2_t *bsp);
 int FaceLightmapSamples(const bsp2_dface_t *face, const vec3_t offset,
 			const bsp2_t *bsp);
+
+/* Kabluk Mapper: the light stage's scratch buffers live on the heap, not on
+ * the 256 KB stack the PSP gives main(). Freed when the stage ends, so that a
+ * second compile starts from the same place the first one did. */
+void Lightwork_Free(void);
 void MakeTnodes(const bsp2_t *bsp);
 
 extern float scaledist;

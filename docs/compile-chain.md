@@ -401,3 +401,68 @@ The lump copy is checked now: a `.bsp` whose lumps point past the end of the
 file (truncated by a full stick, or read while it was still being written) is
 reported as `lump 3 is outside the bsp: offset ..., length ..., ... byte file`
 instead of `memcpy()`ing from past the buffer.
+
+### The stack is 256 KB, and `LightFace()` wanted 477
+
+The light stage died on the **first face**: `kabluk-phase.txt` stopped at
+`light: face 0`, `light.log` stopped at the progress dot `0`, and nothing said
+anything else - no warning, no error, no line. That is what running off the end
+of a stack looks like on a console with no exception handler.
+
+pspdev creates the main thread with `DEFAULT_THREAD_STACK_KB_SIZE` = **256 KB**
+(`pspsdk/src/startup/crt0.c`, overridable with `PSP_MAIN_THREAD_STACK_SIZE_KB`).
+Upstream tyrutils keeps the light stage's scratch buffers as locals:
+
+```c
+#define SINGLEMAP (18*18*4*4)               /* 5184 lumels, 4x4 oversampling */
+
+typedef struct { ... vec3_t points[SINGLEMAP]; }                  lightsurf_t;
+typedef struct { ... lightsample_t samples[SINGLEMAP]; }          lightmap_t;
+
+static void LightFace(...)
+{
+    lightmap_t lightmaps[MAXLIGHTMAPS + 1];   /* 5 x 81 KB */
+    lightsurf_t lightsurf;                    /* 62 KB      */
+}
+```
+
+so the frame was **477 120 bytes**, and the very first face dropped the stack
+pointer 220 KB below where the thread's block ends.
+
+Measure it rather than guess - gcc reports every frame:
+
+```sh
+gcc -std=gnu99 -O1 -c -fstack-usage -Iinclude -Iinclude/common -I. light/ltface.c
+cat ltface.su        # name<TAB>bytes<TAB>qualifier
+```
+
+| function | frame, before | frame, now |
+| --- | --- | --- |
+| `LightFace` | 477 120 | 176 |
+| `Lightmap_Soften` | 83 040 | 176 |
+| `FaceLightmapSamples` | 62 320 | 96 |
+| `Lightsurf_Init` | 176 | 176 |
+| `CalcPoints` | 176 | 176 |
+| `TraceLine` | 5 152 | 5 152 |
+
+The three big ones now live in one heap block for the whole stage
+(`lightwork_t` in `light/ltface.c`: one `lightsurf_t`, five `lightmap_t`, plus
+one `lightmap_t` allocated only if softening is ever turned on), reused by every
+face and freed by `Lightwork_Free()` when the stage ends - the editor runs the
+tools in its own process, so a leaked half megabyte is a half megabyte the next
+compile does not get. Sharing one block is safe because the tools are built
+without `HAVE_THREADS` and the editor passes `-threads 1` to all of them; there
+is no second worker to fight over it.
+
+The move is behaviour neutral: the same 100 brush map compiles to a
+byte-identical `.bsp` before and after (`9208132642045ca86caa85b8d4dc73f5`).
+
+`tests/run.sh` re-measures every frame in the three tools and fails the run if
+one is over 128 KB, so this cannot come back quietly.
+
+The largest frame left anywhere in the three tools is `LoadBrush()` in
+`qbsp/brush.c` at 69 744 bytes - it is called once per brush, not recursively,
+so 256 KB is enough, but it is the next number to look at if qbsp ever starts
+dying with no log line. `vis` recurses (`RecursiveLeafFlow`, 3 184 bytes per
+level) and `light` recurses in `RecursiveHullCheck`, which is why the per level
+sizes stay small.
