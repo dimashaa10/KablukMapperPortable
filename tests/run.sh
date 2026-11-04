@@ -7,6 +7,9 @@
 #   test_input.c  - input.c, with the SDL game controller API faked
 #   test_picker.c - wad.c and the geometry of the texture picker grid, with
 #                   the drawing functions replaced by recording stubs
+#   test_crash.c  - crash.c, the breadcrumb file a console that dies leaves
+#                   behind (built with -DKMP_HAVE_PSP: the writing half only
+#                   exists there)
 #
 # The real sources are compiled against the SDL2 headers that ship in the
 # repository; tests/shim holds the two headers a host build needs to get past
@@ -41,6 +44,12 @@ echo
 echo "== pad translation"
 $cc $flags $inc -o "$work/bin/input" "$root/tests/test_input.c" "$src/input.c"
 "$work/bin/input"
+
+echo
+echo "== the phase breadcrumbs a dead console leaves"
+$cc $flags $inc -D__PSP__ -DKMP_HAVE_PSP -DSDL_MAIN_HANDLED \
+    -o "$work/bin/crash" "$root/tests/test_crash.c" "$src/crash.c"
+KMP_TEST_CWD="$work/stick" "$work/bin/crash"
 
 echo
 echo "== wad reader and the texture picker grid"

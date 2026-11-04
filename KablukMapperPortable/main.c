@@ -429,7 +429,7 @@ static void app_handle_menu_request(void)
         /* no app_release_previews() here: writing a .map needs no memory, and
          * dropping every preview texture only makes the next frame rebuild all
          * of them from the wad. Only the tool chain gets that memory back. */
-        crash_phase("save");
+        crash_step("save");
         SDL_Log("saving the .map: %s", app.settings.out_dir);
         compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
                       1);
@@ -903,7 +903,6 @@ static void app_handle_event(const SDL_Event *event)
 
 static void app_render(void)
 {
-    crash_phase("draw");
     gfx_frame_begin(&app.gfx, COL_BG);
 
     grid_draw(&app.gfx, &app.grid, &app.layout, &app.textures, &app.wad);
@@ -986,8 +985,8 @@ int main(int argc, char *argv[])
     app.entity_class = -1;
     app.loaded_wad[0] = '\0';
 
-    crash_phase("startup");
-    SDL_Log("crash handler: %s", crash_install() ? "installed" : "not available");
+    SDL_Log("phase log: %s", crash_init() ? "kabluk-phase.txt" : "not writable");
+    crash_step("startup");
 
     if (fgd_load(&app.fgd, NULL)) {
         SDL_Log("FGD loaded: %d classes", fgd_count(&app.fgd));
@@ -1000,7 +999,6 @@ int main(int argc, char *argv[])
 
     while (app.running) {
         frame_start = SDL_GetTicks();
-        crash_phase("frame");
 
         app_reload_wad();
 
@@ -1008,13 +1006,15 @@ int main(int argc, char *argv[])
         if (compile_is_running(&app.job)) {
             compile_step(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
                          &app.values);
+            if (!compile_is_running(&app.job)) {
+                /* saved or compiled: the editor is what runs from here */
+                crash_step("editor");
+            }
         }
 
         while (SDL_PollEvent(&event)) {
-            crash_phase("event");
             app_handle_event(&event);
         }
-        crash_phase("after events");
 
         /* The PSP pad (and any gamepad on the desktop) is polled: the events
          * it produces walk through the very same handler as real input. */

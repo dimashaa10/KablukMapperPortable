@@ -1,13 +1,14 @@
 /*
  * Kabluk Mapper Portable - crash.c
  *
- * See crash.h. Everything here is PSP specific; on any other platform the two
- * entry points are empty so the editor code can call them without #ifdefs.
+ * See crash.h: a breadcrumb file, no pspsdk exception API. The file is opened
+ * per line rather than kept open, because the thing being written to is a
+ * memory stick and a crash must not take an unflushed buffer with it.
  */
 #include "crash.h"
 
-#include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
 #if defined(KMP_HAVE_PSP) || defined(__PSP__)
 #define CRASH_HAVE_PSP 1
@@ -15,101 +16,64 @@
 #define CRASH_HAVE_PSP 0
 #endif
 
-#if CRASH_HAVE_PSP
-#include <pspkernel.h>
-#include <pspdebug.h>
+#define CRASH_STEP_LEN 40
+#define CRASH_FILE_NAME "kabluk-phase.txt"
+
+static char crash_last[CRASH_STEP_LEN] = "";
+
+int crash_init(void)
+{
+    FILE *file;
+
+#if !CRASH_HAVE_PSP
+    /* the desktop has debuggers and core files; a stray file in the working
+     * directory would only get committed by accident */
+    return 0;
 #endif
 
-#define CRASH_PHASE_LEN 40
+    file = fopen(CRASH_FILE_NAME, "w");
+    if (file == NULL) {
+        return 0;
+    }
+    fprintf(file, "Kabluk Mapper Portable - last steps\n");
+    fprintf(file, "The console died right after the last line below.\n\n");
+    fflush(file);
+    fclose(file);
+    crash_last[0] = '\0';
+    return 1;
+}
 
-static char crash_phase_buf[CRASH_PHASE_LEN] = "startup";
-
-void crash_phase(const char *phase)
+void crash_step(const char *step)
 {
+    FILE *file;
     int i = 0;
 
-    if (phase == NULL) {
+    if (step == NULL) {
         return;
     }
-    while (phase[i] != '\0' && i < CRASH_PHASE_LEN - 1) {
-        crash_phase_buf[i] = phase[i];
+    if (strcmp(step, crash_last) == 0) {
+        return; /* nothing new: no write, no memory stick traffic */
+    }
+    while (step[i] != '\0' && i < CRASH_STEP_LEN - 1) {
+        crash_last[i] = step[i];
         i++;
     }
-    crash_phase_buf[i] = '\0';
-}
-
-const char *crash_phase_name(void)
-{
-    return crash_phase_buf;
-}
+    crash_last[i] = '\0';
 
 #if CRASH_HAVE_PSP
-
-/* The dump goes next to the EBOOT (the app chdir()s there at startup), and
- * says what the app was doing, where it died, and what the stack looked
- * like - psp-addr2line against KablukMapper.elf turns the addresses into
- * function names. */
-static void crash_dump(PspDebugRegBlock *regs)
-{
-    static PspDebugStackTrace trace[16];
-    FILE *file;
-    int frames;
-    int i;
-
-    frames = pspDebugGetStackTrace2(regs, trace, 16);
-
-    file = fopen("kabluk-crash.txt", "w");
+    file = fopen(CRASH_FILE_NAME, "a");
     if (file == NULL) {
         return;
     }
-    fprintf(file, "Kabluk Mapper Portable - CPU exception\n\n");
-    fprintf(file, "phase:    %s\n", crash_phase_buf);
-    fprintf(file, "epc:      %08X  (where it died)\n", (unsigned int)regs->epc);
-    fprintf(file, "cause:    %08X  (exception %d)\n", (unsigned int)regs->cause,
-            (int)((regs->cause >> 2) & 0x1F));
-    fprintf(file, "badvaddr: %08X  (address it touched)\n",
-            (unsigned int)regs->badvaddr);
-    fprintf(file, "status:   %08X\n", (unsigned int)regs->status);
-    fprintf(file, "ra:       %08X  (caller)\n", (unsigned int)regs->r[31]);
-    fprintf(file, "sp:       %08X\n", (unsigned int)regs->r[29]);
-
-    fprintf(file, "\nregisters:\n");
-    for (i = 0; i < 32; i++) {
-        fprintf(file, "r%-2d %08X%s", i, (unsigned int)regs->r[i],
-                (i % 4 == 3) ? "\n" : "  ");
-    }
-
-    fprintf(file, "\nstack trace (%d frame(s), innermost first):\n", frames);
-    for (i = 0; i < frames; i++) {
-        fprintf(file, "  %08X  called from %08X\n",
-                (unsigned int)trace[i].func_addr,
-                (unsigned int)trace[i].call_addr);
-    }
+    fprintf(file, "%s\n", crash_last);
     fflush(file);
     fclose(file);
+#else
+    (void)file;
+#endif
 }
 
-static void crash_handler(PspDebugRegBlock *regs)
+const char *crash_step_name(void)
 {
-    crash_dump(regs);
-    /* No point carrying on with a corrupted stack: leave the XMB an EBOOT it
-     * can start again, with the dump on the stick. */
-    sceKernelExitGame();
-    for (;;) {
-        /* sceKernelExitGame does not return */
-    }
+    return crash_last;
 }
-
-int crash_install(void)
-{
-    return pspDebugInstallErrorHandler(crash_handler) >= 0;
-}
-
-#else /* !CRASH_HAVE_PSP */
-
-int crash_install(void)
-{
-    return 0;
-}
-
-#endif /* CRASH_HAVE_PSP */

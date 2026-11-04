@@ -545,7 +545,7 @@ void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
     char buf[COMPILE_LOG_LEN];
     int len;
 
-    crash_phase(save_only ? "save start" : "compile start");
+    crash_step(save_only ? "save start" : "compile start");
     compile_close_log(job); /* a second compile must not leak the first log */
     compile_init(job);
     job->state = COMPILE_RUNNING;
@@ -608,13 +608,14 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         return;
     }
 
-    /* If the console dies here, kabluk-crash.txt names the step. */
+    /* If the console dies here, kabluk-phase.txt names the step: the last
+     * line in it is the one the app never came back from. */
     {
         char phase[40];
 
         sprintf(phase, "%s step %d", job->save_only ? "save" : "compile",
                 job->step);
-        crash_phase(phase);
+        crash_step(phase);
     }
 
     switch (job->step) {
