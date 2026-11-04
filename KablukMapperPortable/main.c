@@ -948,17 +948,29 @@ int main(int argc, char *argv[])
     SDL_Event event;
     unsigned int frame_start;
     unsigned int frame_time;
+    int partition_kb;
 
 #ifdef KMP_HAVE_PSP
     app_chdir_to_eboot(argc > 0 ? argv[0] : NULL);
+    /* Kabluk Mapper: pspdev hands malloc one block of the user partition,
+     * sized from what is free the first time anything allocates and leaving a
+     * fixed 512 KB reserve behind. So this is the whole budget the editor and
+     * the tool chain share, and it has to be read before SDL_Init() takes its
+     * half - afterwards the number is the reserve and never moves again, which
+     * is why the tool logs look frozen at 512 KB. */
+    partition_kb = (int)(sceKernelMaxFreeMemSize() / 1024);
 #else
     (void)argc;
     (void)argv;
+    partition_kb = -1;
 #endif
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_Log("SDL init failed: %s", SDL_GetError());
         return 1;
+    }
+    if (partition_kb >= 0) {
+        SDL_Log("user memory before startup: %d KB", partition_kb);
     }
 
     window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_CENTERED,

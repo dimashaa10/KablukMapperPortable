@@ -158,6 +158,37 @@ Mechanical only; no algorithm was touched.
     loading ...`, `---- bsp loaded ----`, `---- bsp2 conversion done ----`,
     `---- entities loaded ----`, `---- bsp tree copied ----`, `---- lighting N
     faces ----`, `---- lightmaps written ----`.
+22. **`LoadFile()` reads with `open`/`lseek`/`read`/`close`, not stdio**
+    (`common/cmdlib.c`). On a PSP the chain stopped on the first big `.bsp`
+    with the log ending between `---- read, closing ----` and
+    `BSP is version 29`: the only statements left there were the `fclose()`
+    and the two after it, so the death was in the stream close (the `free()`
+    of its buffer) or in the statement behind it. A plain handle has no stream
+    and no buffer to hand back, the read loops so a short `read()` on the
+    memory stick cannot truncate silently, and each call logs a line of its
+    own (`---- allocating ----`, `---- allocated, reading ----`, `---- read N
+    of M bytes ----`, `---- closed ----`, `---- loaded ----`). Windows keeps
+    the same calls through `_open`/`_read`/`_lseek`/`_close`.
+23. **The log file is written before the editor hook** (`common/log.c`). The
+    editor's hook (which fills the compile window and `compile.log`) used to
+    run first, so a death inside it looked exactly like a death inside the
+    tool: neither file had the line. Now the tool's own log gets it first, and
+    a line that exists in `light.log` but not in `compile.log` says the hook
+    was the one that died.
+24. **`tyr_free_kb()` is documented as the reserve, not the heap**
+    (`include/common/tyr_port.h`, `bspchain.c`). pspdev's `malloc` takes one
+    partition block at the first allocation and leaves a fixed 512 KB behind,
+    so the number printed next to every load is 512 for the whole session and
+    says nothing about the heap. The editor prints the real budget once:
+    `user memory before startup: N KB`, read before `SDL_Init()`.
+25. **`vis` sizes the visibility buffer from the map** (`vis/vis.c`,
+    `LoadPortals()`). Upstream allocates `MAX_MAP_VISIBILITY` (16 MB) and
+    `memset`s it for every map, whatever the map needs; on the PSP that is most
+    of the heap, asked for by the last stage of the chain. The buffer is now
+    `2 * originalvismapsize + 4 * portalleafs_real`, which is the worst case
+    `CompressRow()` can produce (it can double its input, plus four bytes of
+    slack per leaf), and the old ceiling still caps it. A 144 brush map drops
+    from 16 777 216 bytes to 36, and the `.bsp` is byte for byte identical.
 
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
@@ -167,4 +198,4 @@ MSB8027 complains about. Do not rename or delete qbsp's private copies of
 `cmdlib`/`mathlib`/`file`/`bspfile`: `qbsp/tyr_qbsp_prefix.h` handles the
 symbol clash, the file names have to stay.
 
-Re-syncing with a newer upstream means re-applying these twenty-one steps.
+Re-syncing with a newer upstream means re-applying these twenty-five steps.

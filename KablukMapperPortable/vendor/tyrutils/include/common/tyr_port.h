@@ -43,11 +43,16 @@ extern void (*tyr_log_hook)(const char *text);
 /* Never returns when the editor is driving (longjmps back to bspchain.c). */
 void tyr_fatal_exit(void) TYR_NORETURN_ATTR;
 
-/* Free heap in KB, -1 when the platform cannot say. Implemented by
+/* Free memory in KB, -1 when the platform cannot say. Implemented by
  * bspchain.c (sceKernelMaxFreeMemSize() on the PSP). The tools print it next
  * to the size of the file they are about to load: a load that dies on the
  * console is usually a load that had no room, and this is the number that
- * says so. */
+ * says so.
+ *
+ * On the PSP it reads 512 KB and stays there, because pspdev takes the whole
+ * user partition for the malloc heap the first time anything allocates and
+ * leaves exactly that as a reserve. The budget the tools really have is the
+ * "user memory before startup" line the editor writes to its own log. */
 int tyr_free_kb(void);
 
 #endif /* TYR_PORT_H */

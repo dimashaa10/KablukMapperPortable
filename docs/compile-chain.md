@@ -90,8 +90,18 @@ The lightmap lump is still the big one: ~2000 faces, ~200 lumels each. `light`
 sizes that buffer from the faces instead of reserving a fixed maximum (see
 `vendor/tyrutils/README.kabluk.md`, step 9), so the memory follows the map
 instead of a guess, and no `.lit` space is reserved unless `-lit` is asked for.
-The 16 MB ceiling left in `MAX_MAP_VISIBILITY` (vis) is upstream and is the
-floor of the chain's peak.
+That 16 MB used to be the floor of the chain's peak, because `vis` asked for
+the whole `MAX_MAP_VISIBILITY` ceiling up front and `memset` it before it knew
+what the map needed - on a PSP that one `malloc` is most of the heap, taken by
+the last stage of the chain. It is sized from the map now (twice the
+uncompressed visibility total plus four bytes per leaf, which is what
+`CompressRow()` can at worst produce), and the old ceiling still applies to a
+map that really needs it. For the map above the buffer went from 16 777 216
+bytes to a few kilobytes; the `.bsp` is byte for byte the same:
+
+```
+---- vismap: 36 bytes, ceiling 16777216 ----
+```
 
 Memory still grows with every compile in the same session (the tools keep
 their pools, upstream assumes one run per process): about 2 MB per extra
@@ -181,11 +191,13 @@ STAGE LIGHT - FREE 18342 KB
 ```
 
 `FREE` comes from `sceKernelMaxFreeMemSize()` (PSP only; the line is simply
-shorter on the desktop). `qbsp` is the stage that grows - about 7 MB of peak
-for a 28 x 28 map on the host, all of it handed back before the next stage -
-while `light` adds a few hundred KB. The editor also drops every preview
-texture and picker thumbnail before the chain starts, so what the console's
-32 MB are spent on is the tools and the wad.
+shorter on the desktop) and, as the section above explains, it sits at 512 KB
+for the whole session - it is the reserve pspdev leaves outside the malloc
+heap, not the room a stage has. `qbsp` is the stage that grows - about 7 MB of
+peak for a 28 x 28 map on the host, all of it handed back before the next
+stage - while `light` adds a few hundred KB. The editor also drops every
+preview texture and picker thumbnail before the chain starts, so what the
+console's 32 MB are spent on is the tools and the wad.
 
 **If the screen goes dark during `LIGHT`** it is usually not a crash: light is
 the slow stage (tens of seconds to minutes on a PSP) and the backlight timer
@@ -213,7 +225,12 @@ say how far it got:
 3 option(s), 38 byte path
 ---- timer started ----
 1 thread(s), loading ms0:/PSP/GAME/KABLUK/maps/kabluk.bsp
-ms0:/PSP/GAME/KABLUK/maps/kabluk.bsp is 17648 bytes
+ms0:/PSP/GAME/KABLUK/maps/kabluk.bsp is 17648 bytes, 512 KB free
+---- allocating 17649 bytes ----
+---- allocated, reading ----
+---- read 17648 of 17648 bytes (512 KB free) ----
+---- closed ----
+---- loaded ----
 BSP is version 29
 ---- bsp loaded ----
 ---- bsp2 conversion done ----
@@ -232,16 +249,53 @@ Writing BSP version 29
 ```
 
 A log that stops at `---- timer started ----` died in `strcpy()`/`StripExtension()`
-or in the first `fopen()`; one that stops at `... is N bytes` died before the
-header was read (the three lines after it name the call: `---- allocating`,
-`---- allocated, reading ----`, `---- read, closing ----`); one that stops at
-`BSP is version 29` died inside the lump copy; one that stops at
-`---- lighting N faces ----` died in the lighting itself. The `N KB free` on
-the size line is the heap the load had to work with, and the compile window
-prints the same number in front of the stage (`STAGE LIGHT - FREE N KB`).
-Every one of those has a message in front of it when the cause is something
-the tools can see (a missing file, a full memory stick, a cut-off bsp), so a
-log cut off *without* a message is the signature of an exception.
+or in the first `open()`; one that stops at `... is N bytes` died before the
+header was read, and the six lines after it name the call: `---- allocating`,
+`---- allocated, reading ----`, `---- read N of M bytes ----`, `---- closed`,
+`---- loaded`, then `BSP is version 29`. One that stops at `BSP is version 29`
+died inside the lump copy; one that stops at `---- lighting N faces ----` died
+in the lighting itself. Every one of those has a message in front of it when
+the cause is something the tools can see (a missing file, a full memory stick,
+a cut-off bsp), so a log cut off *without* a message is the signature of an
+exception or of a kill.
+
+### The read is not stdio any more
+
+`LoadFile()` reads with `open` / `lseek` / `read` / `close` instead of
+`fopen` / `fread` / `fclose`. The reason is in `light-3.log` (a PSP run): the
+log ended between `---- read, closing ----` and `BSP is version 29`, which on
+that path leaves only the `fclose()` and the two statements after it - nothing
+that can fail with a message, and everything that a `free()` inside the
+stream close could take down. A plain handle has no stream to set up, no
+buffer to give back, and each call leaves its own line behind, so the same
+read cannot stop in silence; if it stops elsewhere the log now says which.
+
+The read also loops: one `read()` on the memory stick can come back short, and
+the line reports `N of M bytes` so a half read is visible instead of being
+noticed only by the `fread()` count check.
+
+### `N KB free` is the reserve, not the budget
+
+`sceKernelMaxFreeMemSize()` reads 512 KB on the PSP and stays there for the
+whole session. That is not a shortage: pspdev's `malloc` asks for **one**
+partition block, sized from what happens to be free the first time anything
+allocates and leaving a fixed 512 KB threshold behind, so after startup the
+partition has 512 KB left over no matter how much of the heap is in use. The
+number is still worth looking at - if it reads like tens of megabytes the heap
+block was never created and every `malloc()` fails - but the budget the
+editor and the tools share is printed once, by the editor, into its own log:
+
+```
+INFO: user memory before startup: 24064 KB
+```
+
+That is the whole user partition, read before `SDL_Init()` takes its share.
+Everything the tools can spend is that number minus the 512 KB reserve.
+
+Both logs are written per line, and the tool's own log is written **before**
+the editor's hook (see `logvprint_locked__()` in `common/log.c`). So if the two
+disagree - `light.log` has a line that `<out dir>/compile.log` does not - the
+console died inside the editor's log hook, not inside the tool.
 
 The lump copy is checked now: a `.bsp` whose lumps point past the end of the
 file (truncated by a full stick, or read while it was still being written) is

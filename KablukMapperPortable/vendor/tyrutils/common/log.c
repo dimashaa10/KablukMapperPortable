@@ -52,6 +52,16 @@ logvprint_locked__(const char *fmt, va_list args)
 {
     va_list log_args;
 
+    /* Kabluk Mapper: the tool's own log file is written first and the editor's
+     * hook second. If the console dies inside one of the two, the logs stop at
+     * different lines and the pair says which - and the tool's log is the one
+     * that does not depend on the editor being healthy. */
+    if (log_ok) {
+	va_copy(log_args, args);
+	vfprintf(logfile, fmt, log_args);
+	va_end(log_args);
+	fflush(logfile);
+    }
     if (tyr_log_hook != NULL) {
 	char buf[1024];
 
@@ -59,12 +69,6 @@ logvprint_locked__(const char *fmt, va_list args)
 	vsnprintf(buf, sizeof(buf), fmt, log_args);
 	va_end(log_args);
 	tyr_log_hook(buf);
-    }
-    if (log_ok) {
-	va_copy(log_args, args);
-	vfprintf(logfile, fmt, log_args);
-	va_end(log_args);
-	fflush(logfile);
     }
     vprintf(fmt, args);
     fflush(stdout);

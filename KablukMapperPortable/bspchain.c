@@ -24,7 +24,15 @@ void (*tyr_log_hook)(const char *text) = NULL;
 #include <pspkernel.h> /* sceKernelMaxFreeMemSize */
 #endif
 
-/* Free heap in KB for the tools' log line (see tyr_port.h). */
+/* The number the tools print next to a load (see tyr_port.h).
+ *
+ * Read it as "the user partition has this much left over", not "the tools have
+ * this much to spend": pspdev gives malloc one block, sized from what was free
+ * the first time anything allocated and leaving a fixed 512 KB behind for
+ * everybody else, so once the editor has started this is 512 and it does not
+ * move. If it ever reads like the whole partition (tens of megabytes) the heap
+ * block could not be created at all and every malloc fails. The real budget is
+ * printed once at startup, in SDL_Log.txt ("user memory before startup"). */
 int tyr_free_kb(void)
 {
 #if defined(KMP_HAVE_PSP) || defined(__PSP__)

@@ -35,6 +35,27 @@
 #include <libc.h>
 #endif
 
+/* Kabluk Mapper: the plain file calls LoadFile() uses. Windows spells the same
+ * calls with a leading underscore and needs the binary flag to keep CR from
+ * being translated away. */
+#if defined(WIN32) || defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#define KMP_OPEN_FLAGS (_O_RDONLY | _O_BINARY)
+#define kmp_open _open
+#define kmp_read _read
+#define kmp_lseek _lseek
+#define kmp_close _close
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#define KMP_OPEN_FLAGS O_RDONLY
+#define kmp_open open
+#define kmp_read read
+#define kmp_lseek lseek
+#define kmp_close close
+#endif
+
 #ifdef LINUX
 #include <string.h>
 #endif
@@ -514,35 +535,74 @@ Sys_LoadedFileSize(void)
     return loaded_file_size;
 }
 
+/*
+ * Kabluk Mapper: the tools used to read the file with fopen/fread/fclose. On
+ * the PSP the chain stopped on the first big .bsp with the log ending right
+ * after the read and before "BSP is version", so it died in the tail of that
+ * sequence - the close, or the free of the stream buffer inside it. Plain
+ * open/lseek/read/close have no stream to set up and no buffer to give back,
+ * so the read cannot fail that way at all, and each call leaves a line of its
+ * own behind in case one of them does.
+ */
 int
 LoadFile(const char *filename, void *destptr)
 {
     byte **bufferptr = destptr;
     byte *buffer;
-    FILE *file;
+    int handle;
     int length;
+    int offset;
 
-    file = SafeOpenRead(filename);
-    length = Sys_filelength(file);
-    if (length <= 0) {
-	fclose(file);
+    handle = kmp_open(filename, KMP_OPEN_FLAGS);
+    if (handle < 0)
+	Error("%s: cannot open %s", __func__, filename);
+    length = (int)kmp_lseek(handle, 0, SEEK_END);
+    if (length < 0) {
+	kmp_close(handle);
+	Error("%s: cannot size %s", __func__, filename);
+    }
+    if (length == 0) {
+	kmp_close(handle);
 	Error("%s: %s is empty", __func__, filename);
     }
+    (void)kmp_lseek(handle, 0, SEEK_SET);
     loaded_file_size = length;
     /* Kabluk Mapper: a load that kills the console leaves its last line in the
-     * log, so the size, the free heap and each of the three calls that can die
+     * log, so the size, the free heap and each of the calls that can die
      * (allocate, read, close) say so before they run. */
     logprint("%s is %d bytes, %d KB free\n", filename, length, tyr_free_kb());
     logprint("---- allocating %d bytes ----\n", length);
     buffer = *bufferptr = malloc((size_t)length + 1);
-    if (!buffer)
+    if (!buffer) {
+	kmp_close(handle);
 	Error("%s: allocation of %i bytes failed.", __func__, length);
+    }
     logprint("---- allocated, reading ----\n");
 
-    SafeRead(file, buffer, length);
-    logprint("---- read, closing (%d KB free) ----\n", tyr_free_kb());
-    fclose(file);
+    /* Kabluk Mapper: a single read() can come back short on the memory stick,
+     * and the old fread() check was the only thing that noticed. */
+    offset = 0;
+    while (offset < length) {
+	int got = (int)kmp_read(handle, buffer + offset, (size_t)(length - offset));
+
+	if (got <= 0)
+	    break;
+	offset += got;
+    }
+    logprint("---- read %d of %d bytes (%d KB free) ----\n", offset, length,
+	     tyr_free_kb());
+    if (offset != length) {
+	kmp_close(handle);
+	*bufferptr = NULL;
+	free(buffer);
+	logprint("---- short read, closed ----\n");
+	Error("%s: %s stopped at %d of %d bytes", __func__, filename, offset,
+	      length);
+    }
+    kmp_close(handle);
+    logprint("---- closed ----\n");
     buffer[length] = 0;
+    logprint("---- loaded ----\n");
 
     return length;
 }

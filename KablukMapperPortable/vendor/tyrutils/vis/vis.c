@@ -1014,6 +1014,7 @@ LoadPortals(char *name, bsp2_t *bsp)
     winding_t *w;
     int leafnums[2];
     plane_t plane;
+    int vismapsize;
 
     if (!strcmp(name, "-"))
 	f = stdin;
@@ -1065,15 +1066,32 @@ LoadPortals(char *name, bsp2_t *bsp)
 
     originalvismapsize = portalleafs_real * ((portalleafs_real + 7) / 8);
 
-    // FIXME - more intelligent allocation?
-    bsp->dvisdata = malloc(MAX_MAP_VISIBILITY);
+    /* Kabluk Mapper: upstream answers its own "more intelligent allocation?"
+     * with MAX_MAP_VISIBILITY - sixteen megabytes, memset and all, for a map
+     * whose visibility lump is usually a few kilobytes. On the PSP that single
+     * malloc is most of the heap, and it is asked for by the last stage of the
+     * chain, after qbsp and light have already been through the same heap.
+     *
+     * CompressRow can at worst double the bytes it is given (every byte a zero
+     * run of one), and each leaf's output is followed by up to four bytes of
+     * slack, so twice the uncompressed total plus four per leaf is what the
+     * leaves could possibly ask for. Everything above that was never
+     * reachable; the old ceiling still applies, because a map that needs more
+     * than MAX_MAP_VISIBILITY is a broken map and not a big one. */
+    vismapsize = 2 * originalvismapsize + 4 * portalleafs_real;
+    if (vismapsize <= 0 || vismapsize > MAX_MAP_VISIBILITY)
+	vismapsize = MAX_MAP_VISIBILITY;
+    logprint("---- vismap: %d bytes, ceiling %d ----\n", vismapsize,
+	     MAX_MAP_VISIBILITY);
+
+    bsp->dvisdata = malloc(vismapsize);
     if (!bsp->dvisdata)
 	Error("%s: dvisdata allocation failed (%i bytes)", __func__,
-	      MAX_MAP_VISIBILITY);
-    memset(bsp->dvisdata, 0, MAX_MAP_VISIBILITY);
+	      vismapsize);
+    memset(bsp->dvisdata, 0, vismapsize);
 
     vismap = vismap_p = bsp->dvisdata;
-    vismap_end = vismap + MAX_MAP_VISIBILITY;
+    vismap_end = vismap + vismapsize;
 
     for (i = 0, p = portals; i < numportals; i++) {
 	if (fscanf(f, "%i %i %i ", &numpoints, &leafnums[0], &leafnums[1])
