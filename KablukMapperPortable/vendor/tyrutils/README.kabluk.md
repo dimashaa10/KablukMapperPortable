@@ -135,6 +135,29 @@ Mechanical only; no algorithm was touched.
 17. **`vis/soundpvs.c` bounds-checks the texture index.** A face with
     `miptex == -1` indexed `dataofs[-1]`, which is a read outside the texture
     lump; the resulting pointer was then handed to `strncasecmp`.
+18. **`dataofs[] == -1` is skipped in `soundpvs.c`.** The index check above
+    still let a *valid* miptex through whose `dataofs` is `-1` (the format's
+    "no data here"), so `miptex` became `base - 1` and the ambient-texture
+    `strncasecmp` calls read one byte in front of the lump. AddressSanitizer
+    reports it as a heap-buffer-underflow on a map compiled without a wad.
+19. **`LoadBSPFile()` checks every lump against the file size.** The header's
+    `fileofs`/`filelen` were trusted, so a `.bsp` cut short (full memory stick,
+    or read while qbsp was still writing it) made `CopyLump()` `memcpy()` from
+    past the buffer it had just `malloc`ed. `LoadFile()` now records the size it
+    read (`Sys_LoadedFileSize()`), and a lump that does not fit is an `Error()`
+    line - `lump 3 is outside the bsp: offset ..., length ..., ... byte file` -
+    rather than an exception with nothing in the log.
+20. **Negative lengths are errors, not reads.** `Sys_filelength()` returned
+    `-1` when `ftell()` failed, which became `malloc(0)` plus a `fread()` of
+    `(size_t)-1` bytes; `SafeRead()`/`SafeWrite()` cast their `int` count to
+    `size_t` the same way. All three check now, and `LoadFile()` reports an
+    empty file by name. `LoadFile()` also logs `<name> is <n> bytes`, which
+    makes the size of the file a tool is about to parse visible in the log.
+21. **`light` prints a breadcrumb per step**, because the console can power off
+    mid stage and the log then ends at the last line it wrote: `N thread(s),
+    loading ...`, `---- bsp loaded ----`, `---- bsp2 conversion done ----`,
+    `---- entities loaded ----`, `---- bsp tree copied ----`, `---- lighting N
+    faces ----`, `---- lightmaps written ----`.
 
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
@@ -144,4 +167,4 @@ MSB8027 complains about. Do not rename or delete qbsp's private copies of
 `cmdlib`/`mathlib`/`file`/`bspfile`: `qbsp/tyr_qbsp_prefix.h` handles the
 symbol clash, the file names have to stay.
 
-Re-syncing with a newer upstream means re-applying these seventeen steps.
+Re-syncing with a newer upstream means re-applying these twenty-one steps.

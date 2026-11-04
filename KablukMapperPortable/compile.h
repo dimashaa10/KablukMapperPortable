@@ -51,6 +51,8 @@ typedef struct CompileJob {
 
     char out_dir[PATH_LEN];
     char map_path[PATH_LEN];
+    char log_path[PATH_LEN];  /* <out dir>/compile.log, kept for after a crash */
+    void *log_file;           /* the same log, written out line by line */
 
     int brush_total;
     int brush_done;

@@ -114,6 +114,10 @@ CalcAmbientSounds(bsp2_t *bsp)
 		    info->miptex >= bsp->dtexdata.header->nummiptex)
 		    continue;
 		ofs = bsp->dtexdata.header->dataofs[info->miptex];
+		/* Kabluk Mapper: -1 means "this miptex has no data", and base - 1
+		 * is then read by the strncasecmp() calls below. */
+		if (ofs <= 0)
+		    continue;
 		miptex = (const miptex_t *)(bsp->dtexdata.base + ofs);
 
 		if (!strncasecmp(miptex->name, "sky", 3) && ambientsky)

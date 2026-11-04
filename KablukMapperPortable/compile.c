@@ -115,6 +115,16 @@ void compile_log_add(CompileJob *job, const char *line)
     strncpy(job->log[job->line_count], line, COMPILE_LOG_LEN - 1);
     job->log[job->line_count][COMPILE_LOG_LEN - 1] = '\0';
     job->line_count++;
+
+    /* Kabluk Mapper: the window's log lives in RAM and is gone if the console
+     * dies mid compile, which is exactly when it is wanted. Every line is also
+     * written to <out dir>/compile.log and flushed, so the last line in that
+     * file says how far the compile got. */
+    if (job->log_file != NULL) {
+        fputs(line, (FILE *)job->log_file);
+        fputc('\n', (FILE *)job->log_file);
+        fflush((FILE *)job->log_file);
+    }
 }
 
 void compile_scroll(CompileJob *job, int delta)
@@ -143,6 +153,8 @@ void compile_init(CompileJob *job)
     job->scroll = 0;
     job->out_dir[0] = '\0';
     job->map_path[0] = '\0';
+    job->log_path[0] = '\0';
+    job->log_file = NULL;
     job->brush_total = 0;
     job->brush_done = 0;
     job->wall_total = 0;
@@ -491,12 +503,47 @@ static void write_border_walls(CompileJob *job, const Grid *grid, const Wad *wad
 /* ------------------------------------------------------------------ */
 /* Job                                                                 */
 /* ------------------------------------------------------------------ */
+/* "<out dir>/compile.log" - a copy of the window's log that survives the app */
+static void compile_open_log(CompileJob *job)
+{
+    int len;
+    int i = (int)strlen(job->out_dir);
+
+    if (i > PATH_LEN - 12) {
+        i = PATH_LEN - 12;
+    }
+    for (len = 0; len < i; len++) {
+        job->log_path[len] = job->out_dir[len];
+    }
+    job->log_path[len] = '\0';
+    if (len > 0 && job->log_path[len - 1] != '/' && job->log_path[len - 1] != '\\') {
+        job->log_path[len++] = '/';
+        job->log_path[len] = '\0';
+    }
+    strncat(job->log_path, "compile.log", (size_t)(PATH_LEN - 1 - len));
+
+    job->log_file = (void *)fopen(job->log_path, "w");
+    if (job->log_file != NULL) {
+        fprintf((FILE *)job->log_file, "Kabluk Mapper Portable - compile log\n");
+        fflush((FILE *)job->log_file);
+    }
+}
+
+static void compile_close_log(CompileJob *job)
+{
+    if (job->log_file != NULL) {
+        fclose((FILE *)job->log_file);
+        job->log_file = NULL;
+    }
+}
+
 void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
                    const Settings *settings, const Wad *wad, int save_only)
 {
     char buf[COMPILE_LOG_LEN];
     int len;
 
+    compile_close_log(job); /* a second compile must not leak the first log */
     compile_init(job);
     job->state = COMPILE_RUNNING;
     job->step = 0;
@@ -514,6 +561,7 @@ void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
 
     log_target = job;
     job->chain_started = 0;
+    compile_open_log(job);
     job->light_entities = 0;
     compile_log_add(job, save_only ? "KABLUK MAPPER - SAVE MAP SOURCE"
                                    : "KABLUK MAPPER - MAP COMPILER");
@@ -521,6 +569,13 @@ void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
     len = cat_str(buf, len, "OUTPUT: ");
     cat_str(buf, len, job->map_path);
     compile_log_add(job, buf);
+
+    if (job->log_file != NULL) {
+        len = 0;
+        len = cat_str(buf, len, "LOG: ");
+        cat_str(buf, len, job->log_path);
+        compile_log_add(job, buf);
+    }
 
     (void)fgd;
     (void)grid;
@@ -536,6 +591,7 @@ static void compile_fail(CompileJob *job, const char *why)
     compile_log_add(job, why);
     compile_log_add(job, "COMPILE ABORTED");
     job->state = COMPILE_FAILED; /* the bar keeps its colour-coded position */
+    compile_close_log(job);
 }
 
 void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
@@ -849,6 +905,7 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
             job->progress = 100;
             job->state = COMPILE_DONE;
             job->step++;
+            compile_close_log(job);
             break;
         }
 
@@ -918,6 +975,7 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         job->progress = 100;
         job->state = COMPILE_DONE;
         job->step++;
+        compile_close_log(job);
         break;
     }
 

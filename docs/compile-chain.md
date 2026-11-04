@@ -140,9 +140,9 @@ them (`LIGHT ENTITIES: n`) but never invents one.
 
 ## What the tools get wrong, and what this port does about it
 
-Four things in the vendored tools turned up while chasing the report "the
+The things in the vendored tools that turned up while chasing the report "the
 console switches off during `light`". They are listed in
-`vendor/tyrutils/README.kabluk.md` (changes 14 - 17); the short version:
+`vendor/tyrutils/README.kabluk.md` (changes 14 - 20); the short version:
 
 * **`AddLump()` read past the lump buffer.** The BSP writer asked for
   `(size + 3) & ~3` bytes from a buffer that is only `size` bytes long, and
@@ -159,7 +159,17 @@ console switches off during `light`". They are listed in
   from the `.bsp` (the picker still showed them, because the editor reads the
   wad itself). A `:` before the first separator is absolute now, and the log
   says `Opened WAD: ms0:/...` when it worked.
-* **`vis` indexed the texture lump with -1** for faces that have no texture.
+* **`vis` indexed the texture lump with -1** for faces that have no texture -
+  and so did the `dataofs[]` lookup: `-1` means "this miptex has no data", so
+  `base - 1` was read by the `strncasecmp()` sound-ambient check. AddressSanitizer
+  called it a one-byte heap underflow on a map without a wad; it is skipped now.
+* **A cut-off `.bsp` was copied lump by lump unchecked.** `LoadBSPFile()` trusts
+  `fileofs`/`filelen` from the header, so a bsp that a full memory stick cut
+  short made `CopyLump()` `memcpy()` from past the buffer it had just
+  `malloc`ed - on the PSP an exception, not a message. Every lump is now
+  checked against the size of the file `LoadFile()` actually read, and
+  `Sys_filelength()`/`SafeRead()` refuse a negative length instead of turning
+  it into a four-gigabyte read.
 
 ## Sizing the stage: what the log prints
 
@@ -182,3 +192,54 @@ the slow stage (tens of seconds to minutes on a PSP) and the backlight timer
 only sees button presses. Press a button, or turn Backlight Auto-Off off in
 the PSP's power save settings. The `LIGHT DONE IN n S` line afterwards says
 the stage finished.
+
+## When the console dies mid compile: read the two files
+
+The compile window's text lives in RAM, so a console that powers off loses it.
+Both halves of a compile also write to disk, and those two files survive and
+say how far it got:
+
+* **`<out dir>/compile.log`** - a copy of the window's log, one line per
+  `compile_log_add()` call, flushed every line. The editor's own view of the
+  chain: which stage started, which tool line was last, the free heap in
+  front of each stage, and `COMPILE ABORTED` plus the reason if a tool returned
+  an error. The window shows its path as `LOG: <path>` in the second line.
+* **`light.log`** - light's own log, next to the `.bsp` (the working directory
+  of the app). light prints a breadcrumb around every step it takes, so the
+  last line names the call it was in when the console died:
+
+```
+---- light / TyrUtils v0.17-kabluk ----
+3 option(s), 38 byte path
+---- timer started ----
+1 thread(s), loading ms0:/PSP/GAME/KABLUK/maps/kabluk.bsp
+ms0:/PSP/GAME/KABLUK/maps/kabluk.bsp is 17648 bytes
+BSP is version 29
+---- bsp loaded ----
+---- bsp2 conversion done ----
+---- entities loaded ----
+---- bsp tree copied ----
+---- lighting 70 faces ----
+0....1....2....3....4....5....6....7....8....9..\\
+
+Lighting Completed.
+
+lightdatasize: 12149
+---- lightmaps written ----
+0 switchable light styles
+Writing BSP version 29
+  0.0 seconds elapsed
+```
+
+A log that stops at `---- timer started ----` died in `strcpy()`/`StripExtension()`
+or in the first `fopen()`; one that stops at `... is N bytes` or
+`BSP is version 29` died inside the lump copy; one that stops at
+`---- lighting N faces ----` died in the lighting itself.
+Every one of those has a message in front of it when the cause is something
+the tools can see (a missing file, a full memory stick, a cut-off bsp), so a
+log cut off *without* a message is the signature of an exception.
+
+The lump copy is checked now: a `.bsp` whose lumps point past the end of the
+file (truncated by a full stick, or read while it was still being written) is
+reported as `lump 3 is outside the bsp: offset ..., length ..., ... byte file`
+instead of `memcpy()`ing from past the buffer.

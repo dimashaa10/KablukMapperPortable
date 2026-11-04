@@ -357,26 +357,46 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
 	}
     }
 
+    /* Kabluk Mapper: the console can power off mid stage, and then the log
+     * ends at the last line that was written - so name the step before the
+     * call, not after it. */
+    logprint("%d option(s), %d byte path\n", i, (int)strlen(argv[i]));
+
     start = I_FloatTime();
+    logprint("---- timer started ----\n");
 
     strcpy(source, argv[i]);
     StripExtension(source);
     DefaultExtension(source, ".bsp");
+
+    /* Kabluk Mapper: one line per step, because a console that dies during
+     * the light stage leaves nothing else behind - the log file stops at the
+     * last line that was printed, and this says which call it was in. */
+    logprint("%d thread(s), loading %s\n", numthreads, source);
     LoadBSPFile(source, &bspdata);
+    logprint("---- bsp loaded ----\n");
 
     loadversion = bspdata.version;
     if (bspdata.version != BSP2VERSION)
 	ConvertBSPFormat(BSP2VERSION, &bspdata);
+    logprint("---- bsp2 conversion done ----\n");
 
     LoadEntities(bsp);
+    logprint("---- entities loaded ----\n");
+
     MakeTnodes(bsp);
+    logprint("---- bsp tree copied ----\n");
+
     modelinfo = malloc(bsp->nummodels * sizeof(*modelinfo));
     if (!modelinfo)
 	Error("%s: allocation of %d bytes failed\n", __func__,
 	      (int)(bsp->nummodels * sizeof(*modelinfo)));
     FindModelInfo(bsp);
+    logprint("---- lighting %d faces ----\n", bsp->numfaces);
+
     LightWorld(bsp);
     free(modelinfo);
+    logprint("---- lightmaps written ----\n");
 
     WriteEntitiesToString(bsp);
 

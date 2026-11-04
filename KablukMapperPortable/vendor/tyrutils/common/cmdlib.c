@@ -437,9 +437,18 @@ Sys_filelength(FILE *f)
     int end;
 
     pos = ftell(f);
-    fseek(f, 0, SEEK_END);
+    if (pos < 0)
+	pos = 0;
+    if (fseek(f, 0, SEEK_END) != 0)
+	Error("%s: cannot seek to the end of the file", __func__);
     end = ftell(f);
     fseek(f, pos, SEEK_SET);
+
+    /* Kabluk Mapper: a failed ftell returns -1, and length -1 turned into
+     * malloc(0) plus a fread() of (size_t)-1 bytes - on the PSP that is an
+     * exception, not a message in the log. */
+    if (end < 0)
+	Error("%s: cannot size the file", __func__);
 
     return end;
 }
@@ -473,15 +482,20 @@ SafeOpenRead(const char *filename)
 void
 SafeRead(FILE *f, void *buffer, int count)
 {
-    if (fread(buffer, 1, count, f) != (size_t) count)
+    /* Kabluk Mapper: (size_t)-1 would be a four gigabyte read. */
+    if (count < 0)
+	Error("File read failure: negative length");
+    if (fread(buffer, 1, (size_t)count, f) != (size_t) count)
 	Error("File read failure");
 }
 
 void
 SafeWrite(FILE *f, const void *buffer, int count)
 {
-    if (fwrite(buffer, 1, count, f) != (size_t) count)
-	Error("File read failure");
+    if (count < 0)
+	Error("File write failure: negative length");
+    if (fwrite(buffer, 1, (size_t)count, f) != (size_t) count)
+	Error("File write failure");
 }
 
 /*
@@ -489,6 +503,17 @@ SafeWrite(FILE *f, const void *buffer, int count)
  * LoadFile
  * ==============
  */
+/* Kabluk Mapper: the size of the file LoadFile() read last, so LoadBSPFile()
+ * can tell a cut-off lump from an intact one instead of memcpy()ing past the
+ * end of the buffer. -1 when unknown. */
+static int loaded_file_size = -1;
+
+int
+Sys_LoadedFileSize(void)
+{
+    return loaded_file_size;
+}
+
 int
 LoadFile(const char *filename, void *destptr)
 {
@@ -499,7 +524,13 @@ LoadFile(const char *filename, void *destptr)
 
     file = SafeOpenRead(filename);
     length = Sys_filelength(file);
-    buffer = *bufferptr = malloc(length + 1);
+    if (length <= 0) {
+	fclose(file);
+	Error("%s: %s is empty", __func__, filename);
+    }
+    loaded_file_size = length;
+    logprint("%s is %d bytes\n", filename, length);
+    buffer = *bufferptr = malloc((size_t)length + 1);
     if (!buffer)
 	Error("%s: allocation of %i bytes failed.", __func__, length);
 

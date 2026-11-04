@@ -1075,6 +1075,40 @@ CopyLump(const dheader_t *header, int lumpnum, void *destptr)
 
 /*
  * =============
+ * CheckLumps - Kabluk Mapper
+ *
+ * A bsp that was cut off (a full memory stick, a file still being written)
+ * has lump offsets past the end of the file, and CopyLump() would then read
+ * past the buffer it just allocated. On the PSP that is a silent death
+ * instead of a line in the log, so say what happened while the header is
+ * still readable.
+ * =============
+ */
+static void
+CheckLumps(const dheader_t *header)
+{
+    const int filesize = Sys_LoadedFileSize();
+    int i;
+
+    if (filesize < 0)
+	return; /* not read by LoadFile(), trust the header */
+
+    if ((int)sizeof(dheader_t) > filesize)
+	Error("the bsp header is cut off: %d of %d bytes",
+	      filesize, (int)sizeof(dheader_t));
+
+    for (i = 0; i < BSP_LUMPS; i++) {
+	const lump_t *lump = &header->lumps[i];
+
+	if (lump->fileofs < 0 || lump->filelen < 0 ||
+	    (long)lump->fileofs + (long)lump->filelen > (long)filesize)
+	    Error("lump %d is outside the bsp: offset %d, length %d, %d byte file",
+		  i, lump->fileofs, lump->filelen, filesize);
+    }
+}
+
+/*
+ * =============
  * LoadBSPFile
  * =============
  */
@@ -1098,6 +1132,7 @@ LoadBSPFile(const char *filename, bspdata_t *bspdata)
 	header->lumps[i].fileofs = LittleLong(header->lumps[i].fileofs);
 	header->lumps[i].filelen = LittleLong(header->lumps[i].filelen);
     }
+    CheckLumps(header);
 
     /* copy the data */
     if (header->version == BSPVERSION) {
