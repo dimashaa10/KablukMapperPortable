@@ -6,8 +6,8 @@
  * key/value pairs, and brushes made of six axis aligned planes) and is
  * tolerant about everything else: any brush whose planes describe an axis
  * aligned box is snapped onto the cell grid, and brushes that are not a plain
- * block (the floor / ceiling slabs, the sealing walls, anything diagonal) are
- * skipped, because the exporter writes those again on its own.
+ * block (the floor / ceiling slabs, anything diagonal) are skipped, because
+ * the exporter writes those again on its own.
  */
 #ifndef KMP_MAPFILE_H
 #define KMP_MAPFILE_H

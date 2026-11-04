@@ -11,6 +11,8 @@
 #                   behind (built with -DKMP_HAVE_PSP: the writing half only
 #                   exists there)
 #   test_prefs.c  - prefs.c, the kabluk.cfg the editor settings live in
+#   test_compile.c - compile.c, the .map the exporter writes: two slabs and
+#                   whatever the user painted, no walls around the border
 #
 # The real sources are compiled against the SDL2 headers that ship in the
 # repository; tests/shim holds the two headers a host build needs to get past
@@ -71,6 +73,14 @@ $cc $flags $inc -D__PSP__ -DSDL_MAIN_HANDLED -o "$work/bin/picker_psp" \
     "$root/tests/test_picker.c" "$src/picker.c" "$src/textures.c" "$src/wad.c" \
     "$src/fgd.c"
 KMP_TEST_CWD="$work/stick" "$work/bin/picker_psp"
+
+echo
+echo "== the .map the exporter writes (no walls around the border)"
+$cc $flags $inc -D__PSP__ -DKMP_HAVE_PSP -DSDL_MAIN_HANDLED \
+    -o "$work/bin/compile" "$root/tests/test_compile.c" "$src/compile.c" \
+    "$src/grid.c" "$src/settings.c" "$src/fs.c" "$src/crash.c" \
+    "$src/values.c" "$src/fgd.c"
+KMP_TEST_CWD="$work/stick" "$work/bin/compile"
 
 echo
 echo "== type checked with pspdev's integer types"

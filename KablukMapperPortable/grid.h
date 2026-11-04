@@ -4,9 +4,10 @@
  * The square editor grid. One cell is one 128x128x128 unit block and can hold
  * a texture index and/or a point entity (index into the fgd class table).
  *
- * The outer ring of the map is the "shell" (floor, ceiling, walls) and is
- * solid from the start, so a map can never be open to the void - the eraser
- * refuses to remove it.
+ * The grid starts empty, the whole 32 x 32 of it: the border is not reserved
+ * and nothing is pre-placed there. The exporter adds a floor and a ceiling
+ * slab and leaves the rest to what was painted, so a map is as closed as the
+ * user made it.
  */
 #ifndef KMP_GRID_H
 #define KMP_GRID_H
@@ -40,11 +41,11 @@ typedef struct Grid {
 void grid_init(Grid *grid);
 void grid_clear_map(Grid *grid); /* empty map, no pre-placed walls */
 
-/* 1 for the outermost ring of cells. Nothing is reserved there: the exporter
- * walls off the border cells the user left empty (see compile.c). */
+/* 1 for the outermost ring of cells. Nothing is reserved there and nothing is
+ * added to it: painting the ring is how a map is closed. */
 int grid_is_border(int cx, int cy);
 
-/* Blocks, free everywhere - the exporter adds the sealing walls. */
+/* Blocks, free everywhere, the border included. */
 void grid_paint(Grid *grid, int cx, int cy, int tex_index);
 void grid_set_cell(Grid *grid, int cx, int cy, unsigned char value);
 void grid_erase(Grid *grid, int cx, int cy);

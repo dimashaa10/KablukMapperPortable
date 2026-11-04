@@ -7,9 +7,9 @@
  *   - plain C, no WinAPI, no SDL_ttf, no dynamic memory
  *   - entity definitions come from Quake.fgd, textures from the .wad chosen
  *     in the editor settings
- *   - one cell is one 128x128x128 unit block; the exporter adds the floor,
- *     the ceiling and the walls that seal the map (compile.c), so the grid
- *     starts empty and nothing can leak into the void
+ *   - one cell is one 128x128x128 unit block; the exporter adds the floor
+ *     and the ceiling (compile.c) and nothing else, so the grid starts empty
+ *     and a map is as closed as the border the user painted
  *
  * The program opens on the start screen (menu.c, MENU_MAIN): CREATE MAP goes
  * to an empty grid, LOAD MAP reads a .map back through mapfile.c, QUIT leaves.

@@ -25,7 +25,7 @@ over to `bspchain.c`, which calls one tool per frame:
 | step | what happens | progress |
 | --- | --- | --- |
 | 0 | count blocks and entities | 5 % |
-| 1 | seal check: the shell ring must have no holes | 10 % |
+| 1 | say what the exporter adds and what it does not | 10 % |
 | 2 | floor and ceiling slabs | 15 % |
 | 3 | open the `.map`, write worldspawn (name + minlight) and both slabs | 20 % |
 | 4 | merge solid cells into brushes, write them (64 per frame) | 20–80 % |
@@ -50,26 +50,43 @@ they are linked straight into the editor and entered through
 `vendor/tyrutils/README.kabluk.md` for the small patch set that makes that
 possible.
 
-## The map is sealed by the exporter, not by the editor
+## What the exporter adds, and what it leaves alone
 
-The editor starts with an empty map: nothing is pre-placed around the border
-any more, so the whole 32 x 32 grid is yours to paint. What keeps the level
-from leaking is the exporter:
+The editor starts with an empty map and the exporter adds exactly three things
+on its own:
 
-* the floor slab (`z -16..0`) and the ceiling slab (`z 128..144`) cover the
-  whole map;
-* every border cell the user left **empty** becomes part of a wall run
-  (`z -16..144`, one brush per run, four runs for an untouched map), so a map
-  with a single room in the middle still seals;
-* border cells the user painted are left exactly as they are, with the texture
-  that was used.
+* the floor slab (`z -16..0`) and the ceiling slab (`z 128..144`), both
+  covering the whole map, with the floor / ceiling textures from the settings;
+* nothing else.
 
-The log says how many runs were added:
+It used to wall off every **empty** border cell too (`z -16..144`, one brush
+per run), so any map sealed itself. That put geometry the user never painted
+into the level, so the walls are gone: the border is yours. A map is as closed
+as the ring you paint around it, and until that ring exists the level leaks.
+
+The log says so on every compile:
 
 ```
-SEALING WALLS: 4 RUNS AROUND THE BORDER
 FLOOR + CEILING SLABS ADDED
+NO BORDER WALLS - THE MAP SEALS ITSELF
 ```
+
+### A leak is not the end of the compile
+
+`qbsp` floods the map from the outside to decide which leaf is solid. If the
+flood reaches an entity, the map leaked: qbsp prints the warning, writes
+`<name>.pts` (the leak line, for whoever wants to look) and **deletes the
+`.prt` file**. `vis` cannot run without the `.prt`, and failing the whole
+compile over a missing PVS would throw away a `.bsp` that plays fine - Quake
+treats a level without visdata as "everything is visible", which costs frame
+rate and nothing else. So the chain skips vis and says why:
+
+```
+THE MAP LEAKED - NO .PRT, VIS SKIPPED
+BSP READY: 17656 BYTES
+```
+
+Paint the ring (or a proper wall) and the next compile runs vis as usual.
 
 ## Numbers on a desktop (max size grid map, 4096 x 4096 units, 145 brushes)
 
@@ -84,7 +101,7 @@ to **+2048** on both axes; the `.map` the editor writes has exactly that extent
 | vis | 5.4 MB | 0.02 s |
 | whole chain inside the editor | 22 MB | ~0.2 s |
 | the `.bsp` it writes | 443 458 B, of which 313 257 B lightmaps | — |
-| the same map with no blocks at all | 426 924 B (slabs + walls only) | — |
+| the same map with no blocks at all | 426 924 B (the two slabs) | — |
 
 The lightmap lump is still the big one: ~2000 faces, ~200 lumels each. `light`
 sizes that buffer from the faces instead of reserving a fixed maximum (see

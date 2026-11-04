@@ -93,10 +93,9 @@
 #define MAP_WORLD_UNITS (MAP_COLS * BLOCK_UNITS)
 #define MAP_HALF_UNITS (MAP_WORLD_UNITS / 2)
 
-/* The map is sealed by the exporter, not by the editor: the floor and the
- * ceiling are always written as slabs, and border cells the user left empty
- * get a wall around them, so a map can never leak into the void no matter
- * what was (not) painted. */
+/* The exporter writes the floor and the ceiling as slabs covering the whole
+ * map, and nothing else: the border is the user's to paint, so a map that is
+ * not closed leaks (qbsp says so and the chain skips vis). */
 
 /* ------------------------------------------------------------------ */
 /* Timing                                                              */

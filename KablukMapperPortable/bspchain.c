@@ -100,6 +100,17 @@ static void chain_line_add(const char *text)
     }
 }
 
+/* A line the chain itself wants to say (not one of the tools). Goes through
+ * the same hook, so it lands in the compile window and in compile.log. */
+static void chain_note(const char *text)
+{
+    char line[CHAIN_LINE_LEN + 2];
+
+    strcpy(line, text);
+    strcat(line, "\n");
+    chain_line_add(line);
+}
+
 /*
  * qbsp/light/vis call exit(1) on fatal errors. While a stage is running we
  * jump back into bspchain_run_stage() instead of killing the editor.
@@ -315,6 +326,22 @@ int bspchain_run_stage(BspChain *chain)
     if (chain->bsp_bytes <= 0) {
         chain->stage = BSPCHAIN_FAILED;
         return 0;
+    }
+
+    /* The exporter no longer walls off the empty border, so a map that is not
+     * closed leaks - and qbsp answers a leak by deleting the .prt file. vis
+     * cannot run without it, and failing the whole compile over a missing PVS
+     * would throw away a .bsp that plays fine (Quake just treats everything as
+     * visible), so the stage is skipped and the log says why. */
+    if (chain->stage == BSPCHAIN_QBSP) {
+        char prt_path[PATH_LEN];
+
+        fs_copy(prt_path, PATH_LEN, chain->bsp_path);
+        chain_replace_extension(prt_path, ".prt");
+        if (file_size(prt_path) <= 0) {
+            chain->run_vis = 0;
+            chain_note("THE MAP LEAKED - NO .PRT, VIS SKIPPED");
+        }
     }
 
     chain->stage++;

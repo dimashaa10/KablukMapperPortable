@@ -48,8 +48,7 @@ so:
 * **the blocks** are recovered by testing the centre of every cell against the
   planes of each brush, at the middle height of a cell. Anything solid there
   turns that cell on, which is how the floor and ceiling slabs (they sit
-  outside that plane) stay out while the sealing walls and the blocks
-  themselves come back. The cell takes the texture of the brush's up facing
+  outside that plane) stay out while the blocks themselves come back. The cell takes the texture of the brush's up facing
   face, or of its first face when it has none.
 * **point entities** are placed where the fgd class named in `classname` is
   known and the entity has an `origin`; every other key of the entity (and all

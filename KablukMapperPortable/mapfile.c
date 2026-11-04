@@ -401,8 +401,8 @@ static int point_in_brush(const Brush *brush, float x, float y, float z)
 }
 
 /* Anything solid at the middle height of a cell turns that cell on: the floor
- * and ceiling slabs sit outside that plane, the sealing walls and the blocks
- * themselves are caught by their own planes. */
+ * and ceiling slabs sit outside that plane, and the blocks themselves are
+ * caught by their own planes. */
 static void paint_brush(Grid *grid, const Brush *brush, const Wad *wad,
                         MapFile *info)
 {

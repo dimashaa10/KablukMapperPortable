@@ -6,9 +6,11 @@
  * Geometry: every solid cell is a 128x128x128 block standing on z = 0.
  * Neighbouring cells that share a texture are merged into one brush per row,
  * which keeps the .map (and later the BSP) a lot smaller. Besides the blocks
- * the exporter always writes a floor slab below z = 0, a ceiling slab above
- * z = 128 and a wall around every border cell the user left empty, so nothing
- * can leak into the void no matter how little was painted.
+ * the exporter writes a floor slab below z = 0 and a ceiling slab above
+ * z = 128, and nothing else: the border belongs to the user, so an empty
+ * border cell stays empty and a map that is not closed leaks. qbsp says so in
+ * the log and the chain skips vis, which is a normal thing to see while a map
+ * is being built.
  */
 #include "compile.h"
 
@@ -159,7 +161,6 @@ void compile_init(CompileJob *job)
     job->log_file = NULL;
     job->brush_total = 0;
     job->brush_done = 0;
-    job->wall_total = 0;
     job->save_only = 0;
     job->entity_total = 0;
     job->entity_done = 0;
@@ -375,8 +376,8 @@ static const char *wad_fallback_texture(const Wad *wad)
     return "brown";
 }
 
-/* Floor / ceiling / sealing wall texture: the one picked in the editor
- * settings, or the first texture of the wad when nothing was picked. */
+/* Floor / ceiling texture: the one picked in the editor settings, or the
+ * first texture of the wad when nothing was picked. */
 static const char *slab_texture(const Wad *wad, const char *picked)
 {
     if (picked != NULL && picked[0] != '\0') {
@@ -394,112 +395,6 @@ static const char *brush_texture(const Grid *grid, const Wad *wad, int cx,
         return wad->names[index];
     }
     return wad_fallback_texture(wad);
-}
-
-/* ------------------------------------------------------------------ */
-/* Sealing walls                                                       */
-/* ------------------------------------------------------------------ */
-/* The editor no longer pre-fills the border, so the exporter walls it off:
- * every *empty* border cell becomes part of a wall run, cells the user
- * painted are left exactly as they are. Four runs per edge at most, so the
- * brush count barely moves. */
-#define BORDER_RUNS_MAX (MAP_ROWS * 2 + 2)
-
-typedef struct BorderRun {
-    int horizontal; /* 1 = runs along x on row y, 0 = along y on column x */
-    int line;       /* the row / column the run sits on */
-    int from;
-    int to;         /* inclusive cell range */
-} BorderRun;
-
-static int border_runs(const Grid *grid, BorderRun *runs, int max)
-{
-    int n = 0;
-    int i;
-
-    /* top and bottom rows, along x */
-    for (i = 0; i < 2; i++) {
-        int y = (i == 0) ? 0 : MAP_ROWS - 1;
-        int x = 0;
-
-        while (x < MAP_COLS) {
-            int start;
-
-            while (x < MAP_COLS && grid->solid[y][x] != CELL_EMPTY) {
-                x++;
-            }
-            if (x >= MAP_COLS) {
-                break;
-            }
-            start = x;
-            while (x < MAP_COLS && grid->solid[y][x] == CELL_EMPTY) {
-                x++;
-            }
-            if (n < max) {
-                runs[n].horizontal = 1;
-                runs[n].line = y;
-                runs[n].from = start;
-                runs[n].to = x - 1;
-                n++;
-            }
-        }
-    }
-
-    /* left and right columns, along y, corners already covered above */
-    for (i = 0; i < 2; i++) {
-        int x = (i == 0) ? 0 : MAP_COLS - 1;
-        int y = 1;
-
-        while (y < MAP_ROWS - 1) {
-            int start;
-
-            while (y < MAP_ROWS - 1 && grid->solid[y][x] != CELL_EMPTY) {
-                y++;
-            }
-            if (y >= MAP_ROWS - 1) {
-                break;
-            }
-            start = y;
-            while (y < MAP_ROWS - 1 && grid->solid[y][x] == CELL_EMPTY) {
-                y++;
-            }
-            if (n < max) {
-                runs[n].horizontal = 0;
-                runs[n].line = x;
-                runs[n].from = start;
-                runs[n].to = y - 1;
-                n++;
-            }
-        }
-    }
-    return n;
-}
-
-static void write_border_walls(CompileJob *job, const Grid *grid, const Wad *wad,
-                               const Settings *settings)
-{
-    BorderRun runs[BORDER_RUNS_MAX];
-    const char *texture;
-    int count;
-    int i;
-
-    texture = slab_texture(wad, settings != NULL ? settings->floor_tex : NULL);
-    count = border_runs(grid, runs, BORDER_RUNS_MAX);
-    for (i = 0; i < count; i++) {
-        const BorderRun *r = &runs[i];
-        int minz = -SLAB_THICKNESS;
-        int maxz = BLOCK_HEIGHT_UNITS + SLAB_THICKNESS;
-
-        if (r->horizontal) {
-            write_box(job, cell_world_x(r->from), cell_world_y(r->line),
-                      minz, cell_world_x(r->to + 1),
-                      cell_world_y(r->line + 1), maxz, texture);
-        } else {
-            write_box(job, cell_world_x(r->line), cell_world_y(r->from), minz,
-                      cell_world_x(r->line + 1), cell_world_y(r->to + 1), maxz,
-                      texture);
-        }
-    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -623,13 +518,9 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         int solid = count_solid(grid);
         int ents = count_entities(grid);
 
-        {   /* + floor and ceiling slabs + the walls that seal the border */
-            BorderRun runs[BORDER_RUNS_MAX];
-            int walls = border_runs(grid, runs, BORDER_RUNS_MAX);
-
-            job->wall_total = walls;
-            job->brush_total = count_runs(grid) + 2 + walls;
-        }
+        /* + the floor and the ceiling slab, and nothing else: the border is
+         * the user's to paint, so it is not counted as a brush */
+        job->brush_total = count_runs(grid) + 2;
         job->entity_total = ents;
         job->progress = 5;
 
@@ -649,13 +540,12 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         break;
     }
 
-    case 1: /* the border is walled off by the exporter, never by the editor */
-        len = 0;
-        len = cat_str(buf, len, "SEALING WALLS: ");
-        len = cat_int(buf, len, job->wall_total);
-        cat_str(buf, len, " RUNS AROUND THE BORDER");
-        compile_log_add(job, buf);
+    case 1: /* what the exporter adds by itself - and what it does not */
         compile_log_add(job, "FLOOR + CEILING SLABS ADDED");
+        /* Said every compile, because it is the reason a map can now come
+         * back with "leaked": the exporter no longer builds a wall around
+         * the map, the border cells are the user's to fill. */
+        compile_log_add(job, "NO BORDER WALLS - THE MAP SEALS ITSELF");
         job->progress = 10;
         job->step++;
         break;
@@ -772,10 +662,10 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
                   BLOCK_HEIGHT_UNITS + SLAB_THICKNESS,
                   slab_texture(wad, settings != NULL ? settings->ceiling_tex
                                                       : NULL));
-        /* and the walls that keep the map sealed now that nothing is
-         * pre-placed in the border */
-        write_border_walls(job, grid, wad, settings);
-        job->brush_done = 2 + job->wall_total;
+        /* nothing else is added: an empty border cell stays empty, and the
+         * map is sealed by what the user painted (a leak is reported by qbsp
+         * and the chain then skips vis - see bspchain.c) */
+        job->brush_done = 2;
         job->cur_row = 0;
         job->cur_col = 0;
         job->progress = 20;
@@ -951,8 +841,14 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
     case 7: { /* one tool per frame: qbsp, then light, then vis */
         int before = job->chain.stage;
         int stage_running;
+        /* a stage the chain has turned off (vis, when the map leaked and qbsp
+         * left no .prt) is not announced as if it were about to run */
+        int will_run = before != BSPCHAIN_DONE && before != BSPCHAIN_FAILED &&
+                       !(before == BSPCHAIN_QBSP && !job->chain.run_qbsp) &&
+                       !(before == BSPCHAIN_LIGHT && !job->chain.run_light) &&
+                       !(before == BSPCHAIN_VIS && !job->chain.run_vis);
 
-        if (before != BSPCHAIN_DONE && before != BSPCHAIN_FAILED) {
+        if (will_run) {
             int free_kb = compile_free_kb();
 
             len = 0;
@@ -971,7 +867,7 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
 
         /* the time is logged whether the stage worked or not: "light took
          * 74 s and then stopped" is the interesting case */
-        if (before != BSPCHAIN_DONE && before != BSPCHAIN_FAILED) {
+        if (will_run) {
             int seconds = (int)((long)time(NULL) - job->stage_time);
 
             len = 0;

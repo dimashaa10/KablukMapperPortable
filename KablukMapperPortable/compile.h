@@ -7,9 +7,15 @@
  *
  * The pipeline:
  *   1. counts blocks / entities
- *   2. checks the map is sealed (the shell ring must be intact)
+ *   2. adds the floor and ceiling slabs - and nothing else
  *   3. writes a standard Quake .map into the output folder
  *   4. runs the vendored TyrUtils tools on it: qbsp -> light -> vis
+ *
+ * The exporter used to wall off the empty border cells as well, so that any
+ * map would seal. That made the border visible in the level whether the user
+ * wanted it or not, so the walls are gone: an empty cell stays empty and the
+ * map has to be closed by what is painted. qbsp reports the leak, and the
+ * chain then skips vis (no .prt file) and keeps the .bsp it has.
  *
  * Steps 1-3 are plain file writing, so they are portable by construction.
  * Step 4 calls the TyrUtils entry points directly (see bspchain.c) - no
@@ -56,7 +62,6 @@ typedef struct CompileJob {
 
     int brush_total;
     int brush_done;
-    int wall_total;   /* wall runs the exporter adds around the empty border */
     int save_only;    /* 1 = write the .map and stop, do not run the tools */
     long stage_time;  /* time() when the current tool started */
     int entity_total;

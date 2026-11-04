@@ -72,9 +72,10 @@ for it (and for a `palette` / `PALETTE` lump, in any capitalisation) next to
 the wad and one and two folders above. When none is found the picker says so
 in its footer instead of leaving you wondering.
 
-The same floor texture is used for the sealing walls the exporter adds around
-the border of the map (see `compile-chain.md`), so a map built without any
-wall of its own still looks finished.
+The two textures are used for the floor slab below `z = 0` and the ceiling
+slab above `z = 128`, which the exporter writes across the whole map (see
+`compile-chain.md`). Nothing else is added: the border is painted by hand, so
+the blocks along it take whatever texture you gave them.
 
 ## The file browser can create folders
 
