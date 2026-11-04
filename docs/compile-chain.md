@@ -346,10 +346,24 @@ load: done
 bsp: loaded
 bsp: version logged
 light: light world
+light: modelinfo alloc
+light: models ok, faces 95
+light: lighting log
+light: lightdata need 18125
+light: lightdata alloc 18141
+light: face 16
+light: face 32
 light: lightmaps done
 light: write bsp
 light: done
 ```
+
+The lines with a number carry one, and only the ones that matter: `models ok,
+faces N` says the per-model setup finished and how much work is coming,
+`lightdata need N` says how big the light map is going to be before anything
+is allocated for it, and `face N` arrives every sixteen faces, so a console
+that dies in the ray tracing still says how far it got. The face markers name
+the face they are *about to* light.
 
 Read the last line and the log together:
 
@@ -361,7 +375,13 @@ Read the last line and the log together:
 | `load: closed` | the same | the log line after the close |
 | `bsp: loaded` | `---- read ... ----` | the log line, again |
 | `bsp: version logged` | `BSP is version 29` | the lump copy |
-| `light: light world` | `---- lighting N faces ----` | the lighting |
+| `light: light world` | `---- bsp tree copied ----` | the `modelinfo` allocation, the per-model setup or the log line that names the face count |
+| `light: modelinfo alloc` | `---- bsp tree copied ----` | `FindModelInfo()`, which allocates the shadow model list and walks the entities |
+| `light: models ok, faces N` | `---- bsp tree copied ----` | the log line that names the face count |
+| `light: lighting log` | `---- lighting N faces ----` | `EstimateLightDataSize()`, which walks every face of every model |
+| `light: lightdata need N` | `---- lighting N faces ----` | the light data allocation and its `memset` |
+| `light: lightdata alloc N` | `Lighting Completed.` | the ray tracing, per `light: face N` |
+| `light: face N` | the progress dots | the face after N |
 
 That also settles the question the two logs cannot answer on their own: a
 console that stops at the same spot in both files may have died *after* the

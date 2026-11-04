@@ -50,6 +50,30 @@ int oversample = 1;
 qboolean write_litfile = false;
 qboolean litfile_only = false;
 
+/*
+ * Kabluk Mapper: the light stage is the one that takes the console down, and
+ * it does it without a word, so every step below leaves a breadcrumb in
+ * kabluk-phase.txt (see crash.c in the editor). The hook is NULL on the host
+ * and cheap here - it only writes when the name changes.
+ */
+static void
+light_phase(const char *step)
+{
+    if (tyr_phase_hook != NULL)
+	tyr_phase_hook(step);
+}
+
+static void
+light_phase_num(const char *what, int num)
+{
+    char buf[48];
+
+    if (tyr_phase_hook == NULL)
+	return;
+    sprintf(buf, "light: %s %d", what, num);
+    tyr_phase_hook(buf);
+}
+
 int32_t
 AllocateLightDataOffset(int numsamples)
 {
@@ -105,6 +129,9 @@ LightThread(void *arg)
 	facenum = GetThreadWork();
 	if (facenum == -1)
 	    break;
+
+	if ((facenum & 15) == 0)
+	    light_phase_num("face", facenum);
 
 	/* Find the correct model offset */
 	for (i = 0, model = bsp->dmodels; i < bsp->nummodels; i++, model++) {
@@ -239,6 +266,7 @@ LightWorld(bsp2_t *bsp)
 		  (int)need, (int)KMP_MAX_MAP_LIGHTING);
 	bsp->lightdatasize = need;
     }
+    light_phase_num("lightdata need", (int)bsp->lightdatasize);
 
     /* 3 extra bytes per lumel only for the coloured .lit file */
     allocsize = (size_t)bsp->lightdatasize * (write_litfile ? 4 : 1) + 16;
@@ -246,6 +274,7 @@ LightWorld(bsp2_t *bsp)
     if (!bsp->dlightdata)
 	Error("%s: allocation of %i bytes failed.", __func__, (int)allocsize);
     memset(bsp->dlightdata, 0, allocsize);
+    light_phase_num("lightdata alloc", (int)allocsize);
 
     /* align filebase to a 4 byte boundary */
     filebase = file_p = (byte *)(((uintptr_t)bsp->dlightdata + 3) & ~3);
@@ -395,8 +424,11 @@ TYR_LIGHT_ENTRY(int argc, const char **argv)
     if (!modelinfo)
 	Error("%s: allocation of %d bytes failed\n", __func__,
 	      (int)(bsp->nummodels * sizeof(*modelinfo)));
+    light_phase("light: modelinfo alloc");
     FindModelInfo(bsp);
+    light_phase_num("models ok, faces", bsp->numfaces);
     logprint("---- lighting %d faces ----\n", bsp->numfaces);
+    light_phase("light: lighting log");
 
     LightWorld(bsp);
     free(modelinfo);

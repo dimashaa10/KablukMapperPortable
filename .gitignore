@@ -72,3 +72,8 @@ kabluk-phase.txt
 dist/
 *.pbp
 *.sfo
+
+# what a test run leaves behind in maps/
+*.bsp
+*.prt
+*.lit

@@ -201,7 +201,12 @@ Mechanical only; no algorithm was touched.
     open/close - so it survives a console that dies *inside* a log line, which
     the two log files by definition cannot show. `logvprint_locked__()` also
     stops writing to `stdout` under `__PSP__`: an EBOOT's stdout is a TTY with
-    no reader, and a blocked TTY write looks exactly like a crash.
+    no reader, and a blocked TTY write looks exactly like a crash. The light
+    stage has the finer set - `light: modelinfo alloc`, `light: models ok,
+    faces N`, `light: lighting log`, `light: lightdata need N`, `light:
+    lightdata alloc N` and `light: face N` every sixteen faces - because that
+    is where the console was dying, in a window of four calls between two log
+    lines that both said nothing about them.
 
 The Visual Studio project adds `_CRT_SECURE_NO_WARNINGS` and
 `_CRT_NONSTDC_NO_WARNINGS` (`unlink` in `vis/state.c`), and gives the three
