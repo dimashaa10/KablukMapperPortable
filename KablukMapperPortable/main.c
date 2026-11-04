@@ -52,6 +52,7 @@
 #include "compile.h"
 #include "compileui.h"
 #include "config.h"
+#include "crash.h"
 #include "fgd.h"
 #include "gfx.h"
 #include "grid.h"
@@ -183,8 +184,11 @@ static void app_reload_wad(void)
     textures_reset(&app.textures);
     if (wad_load(&app.wad, app.settings.wad_path) > 0) {
         app.current_tex = 0;
-        SDL_Log("WAD loaded: %d textures, palette %s", app.wad.count,
+        SDL_Log("WAD loaded: %d textures, %s, palette %s", app.wad.count,
+                wad_kind_text(&app.wad),
                 app.wad.has_palette ? "found" : "missing (grey preview)");
+        SDL_Log("WAD first texture: %s %dx%d", app.wad.names[0],
+                (int)app.wad.tex_w[0], (int)app.wad.tex_h[0]);
     } else {
         app.wad.count = 0;
         app.current_tex = -1;
@@ -422,7 +426,11 @@ static void app_handle_menu_request(void)
         if (compile_is_running(&app.job)) {
             break;
         }
-        app_release_previews();
+        /* no app_release_previews() here: writing a .map needs no memory, and
+         * dropping every preview texture only makes the next frame rebuild all
+         * of them from the wad. Only the tool chain gets that memory back. */
+        crash_phase("save");
+        SDL_Log("saving the .map: %s", app.settings.out_dir);
         compile_start(&app.job, &app.grid, &app.fgd, &app.settings, &app.wad,
                       1);
         break;
@@ -895,6 +903,7 @@ static void app_handle_event(const SDL_Event *event)
 
 static void app_render(void)
 {
+    crash_phase("draw");
     gfx_frame_begin(&app.gfx, COL_BG);
 
     grid_draw(&app.gfx, &app.grid, &app.layout, &app.textures, &app.wad);
@@ -977,6 +986,9 @@ int main(int argc, char *argv[])
     app.entity_class = -1;
     app.loaded_wad[0] = '\0';
 
+    crash_phase("startup");
+    SDL_Log("crash handler: %s", crash_install() ? "installed" : "not available");
+
     if (fgd_load(&app.fgd, NULL)) {
         SDL_Log("FGD loaded: %d classes", fgd_count(&app.fgd));
     } else {
@@ -988,6 +1000,7 @@ int main(int argc, char *argv[])
 
     while (app.running) {
         frame_start = SDL_GetTicks();
+        crash_phase("frame");
 
         app_reload_wad();
 
@@ -998,8 +1011,10 @@ int main(int argc, char *argv[])
         }
 
         while (SDL_PollEvent(&event)) {
+            crash_phase("event");
             app_handle_event(&event);
         }
+        crash_phase("after events");
 
         /* The PSP pad (and any gamepad on the desktop) is polled: the events
          * it produces walk through the very same handler as real input. */

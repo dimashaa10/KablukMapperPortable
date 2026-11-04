@@ -117,7 +117,7 @@ PSPSDK_MAKE := $(PSPSDK)
 
 OBJS = main.o input.o gfx.o grid.o ui.o font.o layout.o props.o settings.o \
        fs.o menu.o fgd.o wad.o textures.o picker.o compile.o compileui.o \
-       bspchain.o keyboard.o values.o mapfile.o
+       bspchain.o keyboard.o values.o mapfile.o crash.o
 
 # The three map tools are compiled into the editor (see bspchain.c).
 TYR_SRC = $(wildcard vendor/tyrutils/common/*.c) \

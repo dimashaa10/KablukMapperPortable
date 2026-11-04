@@ -185,6 +185,9 @@
     <ClCompile Include="compileui.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="crash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="picker.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -305,6 +308,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="compileui.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="crash.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="picker.h">

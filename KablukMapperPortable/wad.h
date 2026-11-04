@@ -40,6 +40,10 @@ typedef struct Wad {
 int wad_load(Wad *wad, const char *path);
 void wad_close(Wad *wad);
 
+/* "WAD2", "WAD3" or "none" - the two need different mip decoders, so the log
+ * says which one was opened. */
+const char *wad_kind_text(const Wad *wad);
+
 /* Best mip level to use as a small square preview (0..3). */
 int wad_preview_level(const Wad *wad, int index);
 

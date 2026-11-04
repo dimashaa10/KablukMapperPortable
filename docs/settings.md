@@ -46,10 +46,25 @@ selection — cross confirms, circle closes. An empty setting means "first
 texture in the wad", which is what every map used before it existed.
 
 The thumbnails are built from a mip level picked to fit the cell (a 64 x 64
-texture is shown from its 32 x 32 level), stretched to the cell while keeping
-its shape, so a 32 x 64 texture looks tall instead of being squashed into a
-square. They go through a 48 entry least-recently-used cache, so a wad with
-hundreds of textures costs the same memory as a page of them.
+texture is shown from its 32 x 32 level) and only the **centre square** of it
+is drawn, so every cell is a square swatch of its texture and nothing is
+stretched: a 32 x 64 texture shows its middle 16 x 16 instead of being
+squashed into a square or shown as a thin sliver. On the PSP the square is
+rounded up to a power of two *after* the crop (`24 x 24` goes up as
+`32 x 32`), which is what keeps the pixels square - rounding first stretched
+one axis only. The thumbnails go through a 48 entry least-recently-used cache,
+so a wad with hundreds of textures costs the same memory as a page of them.
+
+A block in the editor grid is drawn the same way, from a 16 px mip - one
+texture pixel per screen pixel - and the block cells are 16 px, so what you
+see on the grid is the texture, not an 8 x 8 mip blown up five times.
+
+Both **WAD2** (Quake) and **WAD3** (Half-Life) wads are read. They share the
+header and the 40 byte `miptex_t`, but Quake run-length encodes each mip level
+and Half-Life stores it as raw 8-bit pixels; decoding a WAD3 as runs turns
+every texture into smears. `SDL_Log.txt` names the kind it found
+(`WAD loaded: 236 textures, WAD2, palette found`), as does the first texture's
+size, which is what to send with a report about how a texture looks.
 
 If the **palette** is missing every texture comes out as a grey ramp — a wad
 does not carry one, it is `gfx/palette.lmp` from the game, and the reader looks

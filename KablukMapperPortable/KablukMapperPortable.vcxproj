@@ -207,6 +207,7 @@
     <ClCompile Include="vendor\tyrutils\vis\vis.c" />
     <ClCompile Include="compile.c" />
     <ClCompile Include="compileui.c" />
+    <ClCompile Include="crash.c" />
     <ClCompile Include="picker.c" />
   </ItemGroup>
   <ItemGroup>
@@ -249,6 +250,7 @@
     <ClInclude Include="vendor\tyrutils\qbsp\warnerr.h" />
     <ClInclude Include="compile.h" />
     <ClInclude Include="compileui.h" />
+    <ClInclude Include="crash.h" />
     <ClInclude Include="picker.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

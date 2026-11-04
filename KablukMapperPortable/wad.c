@@ -16,9 +16,13 @@
 #include <stdio.h>
 #include <string.h>
 
-#define WAD_COMP_MAX 16384
+/* Worst case for one compressed mip level: a 128x128 level 0 whose runs are
+ * all one pixel long costs 2 bytes per pixel, 32 KB. (It used to be 16 KB in
+ * an "unsigned int" array, so a big level was silently cut in half and the
+ * rest of the texture came out as whatever the previous one left behind.) */
+#define WAD_COMP_MAX 32768
 
-static unsigned int wad_comp[WAD_COMP_MAX];
+static unsigned char wad_comp[WAD_COMP_MAX];
 
 static unsigned int rd32(const unsigned char *p)
 {
@@ -190,6 +194,19 @@ static void wad_find_palette(Wad *wad, const char *dir, const char *lump_name,
             wad_read_palette_file(wad, path);
         }
     }
+}
+
+const char *
+wad_kind_text(const Wad *wad)
+{
+    if (wad == NULL || !wad->opened) {
+	return "none";
+    }
+    /* WAD2 (Quake) compresses every mip level with RLE, WAD3 (Half-Life)
+     * stores the same four levels as raw 8-bit pixels. Both use type 0x44 for
+     * a mip texture, so the header tells which decoder to use and nothing
+     * else does. */
+    return wad->kind == WAD_KIND_WAD3 ? "WAD3" : "WAD2";
 }
 
 unsigned int wad_palette_rgb(const Wad *wad, int index)
@@ -378,6 +395,7 @@ int wad_read_mip(const Wad *wad, int index, int level, unsigned char *out,
     unsigned char mip[WAD_HEADER_SIZE];
     unsigned int mip_ofs;
     unsigned int comp_len;
+    unsigned int lump_end;
     int w;
     int h;
     int out_size;
@@ -406,46 +424,77 @@ int wad_read_mip(const Wad *wad, int index, int level, unsigned char *out,
         return 0;
     }
     mip_ofs = wad->lump_offset[index] + rd32(mip + 24 + level * 4);
-
-    /* the compressed data of a small level always fits in the buffer */
-    comp_len = wad->lump_size[index];
-    if (comp_len > wad->lump_offset[index] + wad->lump_size[index]) {
-        comp_len = 0;
-    }
     if (mip_ofs < wad->lump_offset[index]) {
-        fclose(file);
-        return 0;
+	fclose(file);
+	return 0;
     }
-    comp_len = wad->lump_offset[index] + wad->lump_size[index] - mip_ofs;
+    lump_end = wad->lump_offset[index] + wad->lump_size[index];
+    if (mip_ofs > lump_end) {
+	fclose(file);
+	return 0;
+    }
+
+    /* WAD3: the level is raw 8-bit pixels, one byte each, no runs at all.
+     * Reading it as RLE is what turns a Half-Life wad into noise (a first
+     * byte of 0xF0 means "240 identical pixels" to the WAD2 decoder). */
+    if (wad->kind == WAD_KIND_WAD3) {
+	if (mip_ofs + (unsigned int)out_size > lump_end) {
+	    fclose(file);
+	    return 0;
+	}
+	if (!read_at(file, mip_ofs, out, out_size)) {
+	    fclose(file);
+	    return 0;
+	}
+	fclose(file);
+	if (out_w != NULL) {
+	    *out_w = w;
+	}
+	if (out_h != NULL) {
+	    *out_h = h;
+	}
+	return 1;
+    }
+
+    /* WAD2: RLE, count byte then 'count' pixels; 255 marks a transparent run
+     * whose length is the next byte. Only the rest of this lump is read. */
+    comp_len = lump_end - mip_ofs;
     if (comp_len > WAD_COMP_MAX) {
-        comp_len = WAD_COMP_MAX;
+	comp_len = WAD_COMP_MAX;
     }
-    if (!read_at(file, mip_ofs, (unsigned char *)wad_comp, (int)comp_len)) {
-        fclose(file);
-        return 0;
+    if (!read_at(file, mip_ofs, wad_comp, (int)comp_len)) {
+	fclose(file);
+	return 0;
     }
     fclose(file);
 
-    /* RLE: count byte, then 'count' pixels; 255 marks a transparent run */
     row = 0;
     i = 0;
     while (i < (int)comp_len && row < out_size) {
-        int count = ((unsigned char *)wad_comp)[i++];
+	int count = wad_comp[i++];
 
-        if (count == 255) {
-            if (i >= (int)comp_len) {
-                break;
-            }
-            row += ((unsigned char *)wad_comp)[i++];
-        } else {
-            int k;
-            if (i + count > (int)comp_len) {
-                break;
-            }
-            for (k = 0; k < count && row < out_size; k++) {
-                out[row++] = ((unsigned char *)wad_comp)[i++];
-            }
-        }
+	if (count == 255) {
+	    if (i >= (int)comp_len) {
+		break;
+	    }
+	    row += wad_comp[i++];
+	} else {
+	    int k;
+	    if (i + count > (int)comp_len) {
+		break;
+	    }
+	    for (k = 0; k < count && row < out_size; k++) {
+		out[row++] = wad_comp[i++];
+	    }
+	}
+    }
+
+    /* A level that ran out of data leaves the tail of the buffer holding the
+     * previous texture: fill it with the first pixel instead, so a broken lump
+     * shows a flat area and not half of another texture. */
+    while (row < out_size) {
+	out[row] = out[0];
+	row++;
     }
     if (out_w != NULL) {
         *out_w = w;

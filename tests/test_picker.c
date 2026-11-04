@@ -155,14 +155,24 @@ void gfx_rect_alpha(Gfx *g, int x, int y, int w, int h, unsigned int rgb,
 /* the upload is recorded: its size is what the PSP has to accept */
 static int upload_w;
 static int upload_h;
+/* the top left pixel of the upload, so a crop can be told from a stretch */
+static unsigned int upload_first;
 
 SDL_Texture *gfx_texture_from_argb(Gfx *g, const unsigned int *pixels, int w, int h)
 {
     (void)g;
-    (void)pixels;
     upload_w = w;
     upload_h = h;
+    upload_first = pixels != NULL ? pixels[0] : 0;
     return NULL;
+}
+
+/* the wad in this test stores palette index (row + col + level); the palette
+ * itself is entry i = i * 7 + 1, and wad_palette_rgb() reads entry index * 3,
+ * so the red channel of an uploaded pixel is (index * 21) + 1 */
+static int upload_index(void)
+{
+    return (int)((((upload_first >> 16) & 0xFF) - 1) / 7) / 3;
 }
 void gfx_texture_destroy(SDL_Texture *texture)
 {
@@ -349,6 +359,95 @@ static int write_wad(const char *path)
     return 1;
 }
 
+/* A WAD3 (Half-Life) lump: the same 40 byte header, but the four mip levels
+ * are raw 8-bit pixels one after another, no run lengths anywhere. Reading
+ * those as WAD2 RLE is exactly what made textures look smeared. */
+static int write_wad3(const char *path)
+{
+    static unsigned char lump[WAD_HEADER_SIZE + 64 * 64 + 32 * 32 + 16 * 16 + 8 * 8];
+    unsigned char palette[768];
+    unsigned char header[12];
+    unsigned char info[32];
+    int ofs = WAD_HEADER_SIZE;
+    int level;
+    FILE *file;
+    int i;
+
+    for (i = 0; i < 768; i++) {
+        palette[i] = PAL_VAL(i);
+    }
+    memset(lump, 0, WAD_HEADER_SIZE);
+    memcpy(lump, "H64", 3);
+    put32(lump + 16, 64);
+    put32(lump + 20, 64);
+    for (level = 0; level < 4; level++) {
+        int w = 64 >> level;
+        int h = 64 >> level;
+        int row;
+        int col;
+
+        put32(lump + 24 + level * 4, (unsigned int)ofs);
+        for (row = 0; row < h; row++) {
+            for (col = 0; col < w; col++) {
+                lump[ofs++] = (unsigned char)((row * 3 + col + level) & 0xFF);
+            }
+        }
+    }
+
+    file = fopen(path, "wb");
+    if (file == NULL) {
+        return 0;
+    }
+    memcpy(header, "WAD3", 4);
+    put32(header + 4, 2);
+    put32(header + 8, 12);
+    fwrite(header, 1, sizeof(header), file);
+
+    memset(info, 0, sizeof(info));
+    put32(info, 12 + 2 * 32);
+    put32(info + 4, (unsigned int)ofs);
+    put32(info + 8, (unsigned int)ofs);
+    info[12] = WAD_LUMP_MIPTEX;
+    memcpy(info + 16, "H64", 3);
+    fwrite(info, 1, sizeof(info), file);
+
+    memset(info, 0, sizeof(info));
+    put32(info, (unsigned int)(12 + 2 * 32 + ofs));
+    put32(info + 4, 768);
+    put32(info + 8, 768);
+    info[12] = 0x40;
+    memcpy(info + 16, "palette", 7);
+    fwrite(info, 1, sizeof(info), file);
+
+    fwrite(lump, 1, (size_t)ofs, file);
+    fwrite(palette, 1, sizeof(palette), file);
+    fclose(file);
+    return 1;
+}
+
+static void test_wad3(void)
+{
+    Wad wad;
+    unsigned char pixels[64 * 64];
+    int w = 0;
+    int h = 0;
+
+    printf("== wad reader, WAD3\n");
+    check(write_wad3("picker_test3.wad") == 1, "writes a WAD3 to read back");
+    check(wad_load(&wad, "picker_test3.wad") == 1, "a WAD3 loads one texture");
+    check(strcmp(wad_kind_text(&wad), "WAD3") == 0, "the wad says it is a WAD3");
+
+    /* level 1 is 32x32 raw: one byte per pixel, row major */
+    check(wad_read_mip(&wad, 0, 1, pixels, (int)sizeof(pixels), &w, &h) == 1 &&
+              w == 32 && h == 32,
+          "level 1 of a WAD3 texture is 32x32");
+    check(pixels[0] == 1 && pixels[1] == 2 && pixels[32] == 4,
+          "raw pixels are copied, not run length decoded");
+    check(pixels[3 * 32 + 5] == (unsigned char)((3 * 3 + 5 + 1) & 0xFF),
+          "the whole level is uncompressed pixels");
+    wad_close(&wad);
+}
+
 static void test_wad(void)
 {
     Wad wad;
@@ -428,9 +527,14 @@ static void test_thumbnail_size(void)
     textures_thumb(NULL, &textures, &wad, 0, 40);
     check(upload_w == 32 && upload_h == 32, "a 64x64 texture previews at 32x32");
 
-    /* 32x64 keeps its shape: level 1 is 16x32 */
+    /* 32x64: level 1 is 16x32, and only its centre 16x16 square is drawn -
+     * a texel count, not a squeeze. A stretched or sliver-shaped swatch is
+     * what made the picker look wrong. */
     textures_thumb(NULL, &textures, &wad, 3, 40);
-    check(upload_w == 16 && upload_h == 32, "a 32x64 texture previews at 16x32");
+    check(upload_w == 16 && upload_h == 16,
+          "a 32x64 texture previews as a square 16x16 swatch");
+    check(upload_index() == 1 + 8,
+          "the square is the centre of the texture (row 8 of 32), not its top");
 
     wad_close(&wad);
 }
@@ -641,6 +745,7 @@ int main(void)
     }
 
     test_wad();
+    test_wad3();
     test_thumbnail_size();
     test_picker();
 

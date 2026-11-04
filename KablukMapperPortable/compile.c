@@ -12,6 +12,8 @@
  */
 #include "compile.h"
 
+#include "crash.h" /* names the phase, so a dead console says what it was doing */
+
 #if defined(KMP_HAVE_PSP) || defined(__PSP__)
 #include <pspkernel.h> /* sceKernelMaxFreeMemSize, for the stage log lines */
 #endif
@@ -543,6 +545,7 @@ void compile_start(CompileJob *job, const Grid *grid, const Fgd *fgd,
     char buf[COMPILE_LOG_LEN];
     int len;
 
+    crash_phase(save_only ? "save start" : "compile start");
     compile_close_log(job); /* a second compile must not leak the first log */
     compile_init(job);
     job->state = COMPILE_RUNNING;
@@ -603,6 +606,15 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
 
     if (job->state != COMPILE_RUNNING) {
         return;
+    }
+
+    /* If the console dies here, kabluk-crash.txt names the step. */
+    {
+        char phase[40];
+
+        sprintf(phase, "%s step %d", job->save_only ? "save" : "compile",
+                job->step);
+        crash_phase(phase);
     }
 
     switch (job->step) {
@@ -891,8 +903,22 @@ void compile_step(CompileJob *job, const Grid *grid, const Fgd *fgd,
         FILE *file = (FILE *)job->file;
 
         if (file != NULL) {
-            fclose(file);
+            /* a full memory stick fails inside fwrite(), which nobody was
+             * checking: the .map was silently cut in half and the next stage
+             * complained about a broken map */
+            int bad = ferror(file) != 0;
+
+            if (fflush(file) != 0) {
+                bad = 1;
+            }
+            if (fclose(file) != 0) {
+                bad = 1;
+            }
             job->file = NULL;
+            if (bad) {
+                compile_fail(job, "THE .MAP COULD NOT BE WRITTEN (STICK FULL?)");
+                return;
+            }
         }
         len = 0;
         len = cat_str(buf, len, "MAP WRITTEN: ");

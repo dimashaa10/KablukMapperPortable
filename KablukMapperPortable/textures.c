@@ -6,6 +6,14 @@
 /* biggest mip the editor ever wants: enough for a 64x64 level */
 #define MIP_MAX 64
 
+/* The preview drawn on a block in the grid. The cell itself is CELL_SIZE (16)
+ * px, so a 16 px mip is one texture pixel per screen pixel: sharp, and 1 KB
+ * per texture instead of the 16 KB a 64x64 one would cost (the grid can show
+ * a few hundred blocks and the PSP shares 2 MB of video memory with the two
+ * framebuffers). It still beats the smallest mip stretched over the cell,
+ * which is what made blocks look like grey mush. */
+#define TEXTURES_BLOCK_LEVEL CELL_SIZE
+
 /* The PSP renderer only accepts power-of-two textures, so the console gets a
  * resampled one when a texture is 24x24 or 40x64: without this SDL refuses it
  * and the cell stays empty. The desktop renderers take any size, so there the
@@ -92,36 +100,53 @@ static void textures_resample(int w, int h, int pot_w, int pot_h)
 
 #endif /* TEXTURES_POT */
 
+/* Builds the texture a cell shows: the centre square of the mip, so the
+ * picture is never stretched. A 32x64 texture is drawn from its middle 32x32
+ * (a square swatch, like every other cell) instead of being squeezed into a
+ * square or shown as a thin sliver with empty space on both sides. */
 static SDL_Texture *textures_build(Gfx *g, const Wad *wad, int index, int level,
                                    int *out_w, int *out_h)
 {
     int w = 0;
     int h = 0;
     int count;
-    int i;
+    int side;
+    int ox;
+    int oy;
+    int x;
+    int y;
 
     count = textures_read(wad, index, level, &w, &h);
     if (count == 0) {
         return NULL;
     }
-    for (i = 0; i < count; i++) {
-        argb[i] = wad_palette_rgb(wad, mip_pixels[i]);
+    side = (w < h) ? w : h;
+    ox = (w - side) / 2;
+    oy = (h - side) / 2;
+    for (y = 0; y < side; y++) {
+        const unsigned char *src = mip_pixels + (oy + y) * w + ox;
+
+        for (x = 0; x < side; x++) {
+            argb[y * side + x] = wad_palette_rgb(wad, src[x]);
+        }
     }
-    *out_w = w;
-    *out_h = h;
+    *out_w = side;
+    *out_h = side;
 
 #if TEXTURES_POT
-    if (w != textures_pot_size(w) || h != textures_pot_size(h)) {
-        int pot_w = textures_pot_size(w);
-        int pot_h = textures_pot_size(h);
+    /* Square first, then the power-of-two resample: the two steps used to be
+     * the other way round, and rounding 24 to 32 (or 40 to 64) stretched the
+     * picture on one axis only. */
+    if (side != textures_pot_size(side)) {
+        int pot = textures_pot_size(side);
 
-        textures_resample(w, h, pot_w, pot_h);
-        *out_w = pot_w;
-        *out_h = pot_h;
-        return gfx_texture_from_argb(g, argb_pot, pot_w, pot_h);
+        textures_resample(side, side, pot, pot);
+        *out_w = pot;
+        *out_h = pot;
+        return gfx_texture_from_argb(g, argb_pot, pot, pot);
     }
 #endif
-    return gfx_texture_from_argb(g, argb, w, h);
+    return gfx_texture_from_argb(g, argb, side, side);
 }
 
 SDL_Texture *textures_get(Gfx *g, Textures *textures, const Wad *wad, int index)
@@ -140,7 +165,7 @@ SDL_Texture *textures_get(Gfx *g, Textures *textures, const Wad *wad, int index)
         return NULL;
     }
 
-    level = wad_preview_level(wad, index);
+    level = wad_fit_level(wad, index, TEXTURES_BLOCK_LEVEL);
     textures->tex[index] = textures_build(g, wad, index, level, &w, &h);
     if (textures->tex[index] == NULL) {
         textures->state[index] = TEX_STATE_FAILED;
