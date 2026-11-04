@@ -10,6 +10,7 @@
 #   test_crash.c  - crash.c, the breadcrumb file a console that dies leaves
 #                   behind (built with -DKMP_HAVE_PSP: the writing half only
 #                   exists there)
+#   test_prefs.c  - prefs.c, the kabluk.cfg the editor settings live in
 #
 # The real sources are compiled against the SDL2 headers that ship in the
 # repository; tests/shim holds the two headers a host build needs to get past
@@ -44,6 +45,12 @@ echo
 echo "== pad translation"
 $cc $flags $inc -o "$work/bin/input" "$root/tests/test_input.c" "$src/input.c"
 "$work/bin/input"
+
+echo
+echo "== the settings file (floor / ceiling textures survive a restart)"
+$cc $flags $inc -o "$work/bin/prefs" \
+    "$root/tests/test_prefs.c" "$src/prefs.c" "$src/settings.c" "$src/fs.c"
+KMP_TEST_CWD="$work/stick" "$work/bin/prefs"
 
 echo
 echo "== the phase breadcrumbs a dead console leaves"

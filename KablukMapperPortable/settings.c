@@ -4,11 +4,19 @@
 #include "settings.h"
 
 #include <stddef.h> /* NULL */
+#include <string.h>  /* memset */
 
 #include "fs.h"
 
 void settings_defaults(Settings *settings)
 {
+    if (settings == NULL) {
+        return;
+    }
+    /* Every field is cleared, not just its first byte: what is left of a
+     * longer value would otherwise keep turning up in the file and in the
+     * "did anything change" check. */
+    memset(settings, 0, sizeof(*settings));
     settings->wad_path[0] = '\0';
     fs_copy(settings->out_dir, PATH_LEN, DEFAULT_OUT_DIR);
     fs_copy(settings->map_name, FS_NAME_LEN, DEFAULT_MAP_NAME);

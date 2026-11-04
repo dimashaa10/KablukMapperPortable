@@ -63,6 +63,11 @@ KablukMapperPortable/*.user
 # Tool logs written next to the executable
 *.log
 
+# The editor's own settings file and its crash breadcrumbs (both are written
+# next to the EBOOT / the executable, never part of the repository)
+kabluk.cfg
+kabluk-phase.txt
+
 # PSP build output (make / make dist)
 dist/
 *.pbp

@@ -232,9 +232,13 @@ Writing BSP version 29
 ```
 
 A log that stops at `---- timer started ----` died in `strcpy()`/`StripExtension()`
-or in the first `fopen()`; one that stops at `... is N bytes` or
+or in the first `fopen()`; one that stops at `... is N bytes` died before the
+header was read (the three lines after it name the call: `---- allocating`,
+`---- allocated, reading ----`, `---- read, closing ----`); one that stops at
 `BSP is version 29` died inside the lump copy; one that stops at
-`---- lighting N faces ----` died in the lighting itself.
+`---- lighting N faces ----` died in the lighting itself. The `N KB free` on
+the size line is the heap the load had to work with, and the compile window
+prints the same number in front of the stage (`STAGE LIGHT - FREE N KB`).
 Every one of those has a message in front of it when the cause is something
 the tools can see (a missing file, a full memory stick, a cut-off bsp), so a
 log cut off *without* a message is the signature of an exception.

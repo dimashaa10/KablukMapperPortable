@@ -20,6 +20,20 @@ int tyr_vis_main(int argc, char **argv);
 /* Declared in vendor/tyrutils/include/common/tyr_port.h */
 void (*tyr_log_hook)(const char *text) = NULL;
 
+#if defined(KMP_HAVE_PSP) || defined(__PSP__)
+#include <pspkernel.h> /* sceKernelMaxFreeMemSize */
+#endif
+
+/* Free heap in KB for the tools' log line (see tyr_port.h). */
+int tyr_free_kb(void)
+{
+#if defined(KMP_HAVE_PSP) || defined(__PSP__)
+    return (int)(sceKernelMaxFreeMemSize() / 1024);
+#else
+    return -1;
+#endif
+}
+
 #define CHAIN_LINE_LEN 120
 #define CHAIN_ARG_MAX 8
 

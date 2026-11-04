@@ -529,12 +529,18 @@ LoadFile(const char *filename, void *destptr)
 	Error("%s: %s is empty", __func__, filename);
     }
     loaded_file_size = length;
-    logprint("%s is %d bytes\n", filename, length);
+    /* Kabluk Mapper: a load that kills the console leaves its last line in the
+     * log, so the size, the free heap and each of the three calls that can die
+     * (allocate, read, close) say so before they run. */
+    logprint("%s is %d bytes, %d KB free\n", filename, length, tyr_free_kb());
+    logprint("---- allocating %d bytes ----\n", length);
     buffer = *bufferptr = malloc((size_t)length + 1);
     if (!buffer)
 	Error("%s: allocation of %i bytes failed.", __func__, length);
+    logprint("---- allocated, reading ----\n");
 
     SafeRead(file, buffer, length);
+    logprint("---- read, closing (%d KB free) ----\n", tyr_free_kb());
     fclose(file);
     buffer[length] = 0;
 

@@ -53,6 +53,7 @@
 #include "compileui.h"
 #include "config.h"
 #include "crash.h"
+#include "prefs.h"
 #include "fgd.h"
 #include "gfx.h"
 #include "grid.h"
@@ -125,6 +126,23 @@ static void app_seed_defaults(void)
     if (DEFAULT_MAP_MESSAGE[0] != '\0') {
         values_set(&app.values, VALUES_WORLD_CX, VALUES_WORLD_CY, "message",
                    DEFAULT_MAP_MESSAGE);
+    }
+}
+
+/* What the settings file holds right now: the app compares against it once a
+ * frame and writes only when something changed, so the floor and ceiling
+ * textures (and the wad, the folder and the map name) are kept without every
+ * place that can change them having to remember to save. */
+static Settings settings_on_disk;
+
+static void app_save_settings_if_changed(void)
+{
+    if (prefs_same(&app.settings, &settings_on_disk)) {
+        return;
+    }
+    if (prefs_save(&app.settings)) {
+        settings_on_disk = app.settings;
+        SDL_Log("settings saved: %s", PREFS_FILE_NAME);
     }
 }
 
@@ -962,6 +980,13 @@ int main(int argc, char *argv[])
     input_init(&app.input);
     grid_init(&app.grid);
     settings_defaults(&app.settings);
+    {
+        int loaded = prefs_load(&app.settings);
+
+        SDL_Log(loaded > 0 ? "settings loaded from %s (%d)" : "no settings file (%s)",
+                PREFS_FILE_NAME, loaded);
+    }
+    settings_on_disk = app.settings;
     menu_init(&app.menu, &app.settings, &app.job);
     picker_init(&app.picker);
     props_view_init(&app.props);
@@ -1015,6 +1040,7 @@ int main(int argc, char *argv[])
         while (SDL_PollEvent(&event)) {
             app_handle_event(&event);
         }
+        app_save_settings_if_changed();
 
         /* The PSP pad (and any gamepad on the desktop) is polled: the events
          * it produces walk through the very same handler as real input. */

@@ -85,6 +85,31 @@ wall of its own still looks finished.
 open. The list, the entry counter and the path field refresh right away, so
 the new folder can be entered or picked as the output folder immediately.
 
+## The settings are kept in `kabluk.cfg`
+
+Everything on this window - the wad, the output folder, the map name and the
+two slab textures - is written to **`kabluk.cfg`** next to `EBOOT.PBP` (next to
+the executable on the desktop) as soon as it changes, and read back at
+startup. So picking a floor texture in the picker and quitting no longer means
+picking it again tomorrow:
+
+```
+# Kabluk Mapper Portable - editor settings
+# written by the editor when something here changes
+wad=ms0:/PSP/GAME/KABLUKmp/quake.wad
+out=ms0:/PSP/GAME/KABLUKmp/maps
+name=qwe1
+floor=brown
+ceiling=sky1
+```
+
+The file is plain text and one `key=value` per line: `#` starts a comment, an
+unknown key is ignored (so a newer build's file does not stop an older one
+from starting), and a value keeps everything after the first `=` - the paths
+on a PSP are full of `:` and `/`. A missing or half-written file just means
+the defaults (`maps`, `kabluk`, first texture of the wad) are used. Delete it
+to get those defaults back.
+
 The browser is used for three things: the `.wad`, the output folder
 (`( USE THIS FOLDER )` confirms the folder you are in) and nothing else — it
 never deletes or renames anything.
